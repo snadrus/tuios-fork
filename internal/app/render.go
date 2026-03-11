@@ -3,6 +3,7 @@ package app
 import (
 	"image/color"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -100,6 +101,16 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 
 		content := m.renderTerminal(window, isFocused, m.Mode == TerminalMode)
 
+		expectedLines := config.TerminalHeight(window.Height)
+		lines := strings.Split(content, "\n")
+		if len(lines) > expectedLines {
+			content = strings.Join(lines[:expectedLines], "\n")
+			lines = lines[:expectedLines]
+		}
+		// Use actual line count for box height - prevents Lipgloss from adding an extra
+		// row of background padding (the "garbage" solid-colored row on every-other resize).
+		contentLines := len(lines)
+
 		isRenaming := m.RenamingWindow && i == m.FocusedWindow
 
 		var titleFg color.Color
@@ -119,7 +130,7 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 		}
 		boxContent := addToBorder(
 			windowBox.Width(window.Width).
-				Height(window.Height-1).
+				Height(max(contentLines, 1)).
 				BorderForeground(borderColorObj).
 				Render(content),
 			borderColorObj,

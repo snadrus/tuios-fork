@@ -67,8 +67,17 @@ func (s *Screen) Height() int {
 
 // Resize resizes the screen.
 func (s *Screen) Resize(width int, height int) {
+	oldW := s.buf.Width()
+	oldH := s.buf.Height()
 	s.buf.Resize(width, height)
 	s.scroll = s.buf.Bounds()
+	// When growing, clear newly added rows/columns to prevent garbage from uninitialized buffer.
+	if height > oldH {
+		s.buf.ClearArea(uv.Rect(0, oldH, width, height-oldH))
+	}
+	if width > oldW {
+		s.buf.ClearArea(uv.Rect(oldW, 0, width-oldW, height))
+	}
 }
 
 // Width returns the width of the screen.

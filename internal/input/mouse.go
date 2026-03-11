@@ -145,6 +145,31 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		}
 	}
 
+	// Check resize handle (U+2921) on title bar: left-click starts resize
+	titleBarY := clickedWindow.Y
+	resizeHandleX := clickedWindow.X + config.ContentOffsetX()
+	// Resize handle is 1–2 columns; allow slight tolerance for easier clicking
+	if mouse.Button == tea.MouseLeft && Y == titleBarY && X >= resizeHandleX && X < resizeHandleX+2 {
+		o.FocusWindow(clickedWindowIndex)
+		o.InteractionMode = true
+		o.Resizing = true
+		o.Windows[clickedWindowIndex].IsBeingManipulated = true
+		o.ResizeStartX = mouse.X
+		o.ResizeStartY = mouse.Y
+		o.PreResizeState = terminal.Window{
+			Title:  clickedWindow.Title,
+			Width:  clickedWindow.Width,
+			Height: clickedWindow.Height,
+			X:      clickedWindow.X,
+			Y:      clickedWindow.Y,
+			Z:      clickedWindow.Z,
+			ID:     clickedWindow.ID,
+		}
+		o.ResizeCorner = app.TopLeft
+		o.DraggedWindowIndex = clickedWindowIndex
+		return o, nil
+	}
+
 	// Check button clicks FIRST before mode switching or focus changes
 	// Only check if buttons are not hidden
 	if !config.HideWindowButtons {
@@ -794,7 +819,8 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 
 		for i := range o.Windows {
 			o.Windows[i].IsBeingManipulated = false
-			o.Windows[i].ContentDirty = true // Invalidate cache when exiting resize mode
+			o.Windows[i].InvalidateCache() // Clear stale layer/content; prevents garbage row from cached data
+			o.Windows[i].ContentDirty = true
 		}
 
 		// Comprehensive state cleanup to prevent stale values from affecting subsequent operations

@@ -948,7 +948,7 @@ func (w *Window) Resize(width, height int) {
 	w.Width = width
 	w.Height = height
 
-	// Mark both position and content dirty for resize operations
+	w.InvalidateCache() // Clear stale layer/content before redraw
 	w.MarkPositionDirty()
 	w.MarkContentDirty()
 

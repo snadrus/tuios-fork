@@ -422,6 +422,9 @@ const (
 	// WindowBorderVertical is the vertical line character for window borders.
 	WindowBorderVertical = "│" // U+2502
 
+	// WindowResizeHandle is the top-left resize handle character (U+2921).
+	WindowResizeHandle     = "\u2921" // ⤡
+	WindowResizeHandleASCII = "+"
 	// WindowButtonClose is the close/kill window button character.
 	WindowButtonClose = " ⤫ " // Close/kill window
 	// WindowPillLeft is the left pill-style character for window decorations.
@@ -582,6 +585,14 @@ func GetWindowBorderHorizontal() string {
 // Deprecated: Use GetWindowBorderLeft() or GetWindowBorderRight() for half-block borders
 func GetWindowBorderVertical() string {
 	return GetWindowBorderLeft()
+}
+
+// GetWindowResizeHandle returns the top-left resize handle character (U+2921).
+func GetWindowResizeHandle() string {
+	if UseASCIIOnly {
+		return WindowResizeHandleASCII
+	}
+	return WindowResizeHandle
 }
 
 // GetWindowButtonClose returns the appropriate close button character

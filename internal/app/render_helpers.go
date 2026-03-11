@@ -271,14 +271,15 @@ func addToBorder(content string, borderColor color.Color, titleFg color.Color, w
 
 	borderStyle := style.Foreground(borderColor)
 
-	// Build top border
+	// Build top border: resize handle (U+2921) on the left, then title/buttons
+	resizeHandle := borderStyle.Render(config.GetWindowResizeHandle())
 	var topBorder string
 	if titlePos == "top" && windowName != "" {
 		// Title on top with buttons on the right
-		topBorder = renderTitleWithButtons(windowName, buttons, width, borderColor, titleFg, true, windowBg)
+		topBorder = resizeHandle + renderTitleWithButtons(windowName, buttons, width-lipgloss.Width(resizeHandle), borderColor, titleFg, true, windowBg)
 	} else {
 		// Normal top border with buttons on right
-		topBorder = RightString(buttons, width, borderColor, windowBg)
+		topBorder = resizeHandle + RightString(buttons, width-lipgloss.Width(resizeHandle), borderColor, windowBg)
 	}
 
 	if !config.HasSideBorders() {

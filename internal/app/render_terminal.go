@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"image/color"
 	"strings"
 
@@ -198,6 +197,14 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 		defaultBg = window.Terminal.BackgroundColor()
 	}
 
+	// Prevent embedded newlines from creating extra visual rows (garbage on resize).
+	sanitizeChar := func(s string) string {
+		if s == "\n" {
+			return " "
+		}
+		return s
+	}
+
 	safeColorEquals := func(a, b color.Color) (result bool) {
 		defer func() {
 			if recover() != nil {
@@ -290,13 +297,13 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 				if inScrollbackMode {
 					if y < window.ScrollbackOffset {
 						scrollbackIndex := scrollbackLen - window.ScrollbackOffset + y
-						if scrollbackIndex >= 0 && scrollbackIndex < scrollbackLen {
-							scrollbackLine := window.ScrollbackLine(scrollbackIndex)
-							if scrollbackLine != nil && x < len(scrollbackLine) {
-								cursorCell = &scrollbackLine[x]
-								if cursorCell.Content != "" {
-									char = cursorCell.Content
-								}
+							if scrollbackIndex >= 0 && scrollbackIndex < scrollbackLen {
+								scrollbackLine := window.ScrollbackLine(scrollbackIndex)
+								if scrollbackLine != nil && x < len(scrollbackLine) {
+									cursorCell = &scrollbackLine[x]
+									if cursorCell.Content != "" {
+										char = sanitizeChar(string(cursorCell.Content))
+									}
 								if cursorCell.Width > 0 {
 									charWidth = cursorCell.Width
 								}
@@ -307,7 +314,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 						if screenY >= 0 && screenY < screen.Height() {
 							cursorCell = screen.CellAt(x, screenY)
 							if cursorCell != nil && cursorCell.Content != "" {
-								char = cursorCell.Content
+								char = sanitizeChar(string(cursorCell.Content))
 							}
 							if cursorCell != nil && cursorCell.Width > 0 {
 								charWidth = cursorCell.Width
@@ -317,7 +324,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 				} else {
 					cursorCell = screen.CellAt(x, y)
 					if cursorCell != nil && cursorCell.Content != "" {
-						char = cursorCell.Content
+						char = sanitizeChar(string(cursorCell.Content))
 					}
 					if cursorCell != nil && cursorCell.Width > 0 {
 						charWidth = cursorCell.Width
@@ -371,7 +378,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 
 			char := " "
 			if cell != nil && cell.Content != "" {
-				char = string(cell.Content)
+				char = sanitizeChar(string(cell.Content))
 			}
 
 			if inVisualMode && visualSelection[y] != nil && visualSelection[y][x] && x <= lineEndX {
@@ -533,31 +540,41 @@ func (m *OS) renderResizeIndicator(window *terminal.Window) string {
 	termWidth := config.TerminalWidth(window.Width)
 	termHeight := config.TerminalHeight(window.Height)
 
-	resizeMsg := fmt.Sprintf("Resizing... %dx%d", termWidth, termHeight)
-
+	msg := "Resizing..."
+	centerX := max((termWidth-len(msg))/2, 0)
+	// Inner border (inset 1 from edges) - ensures every row has content, fixes garbage-row bug
+	top, bot, left, right := 0, termHeight-1, 0, termWidth-1
 	var builder strings.Builder
-
-	centerY := termHeight / 2
-	centerX := max((termWidth-len(resizeMsg))/2, 0)
-
 	for y := range termHeight {
 		for x := range termWidth {
-			if y == centerY && x >= centerX && x < centerX+len(resizeMsg) {
-				msgIdx := x - centerX
-				if msgIdx < len(resizeMsg) {
-					builder.WriteRune(rune(resizeMsg[msgIdx]))
-				} else {
-					builder.WriteRune(' ')
-				}
-			} else {
-				builder.WriteRune(' ')
+			var r rune
+			switch {
+			case y == termHeight/2 && x >= centerX && x < centerX+len(msg):
+				r = rune(msg[x-centerX])
+			case y == top && x > left && x < right:
+				r = '─'
+			case y == bot && x > left && x < right:
+				r = '─'
+			case x == left && y > top && y < bot:
+				r = '│'
+			case x == right && y > top && y < bot:
+				r = '│'
+			case y == top && x == left:
+				r = '╭'
+			case y == top && x == right:
+				r = '╮'
+			case y == bot && x == left:
+				r = '╰'
+			case y == bot && x == right:
+				r = '╯'
+			default:
+				r = ' '
 			}
+			builder.WriteRune(r)
 		}
-
 		if y < termHeight-1 {
 			builder.WriteRune('\n')
 		}
 	}
-
 	return builder.String()
 }
