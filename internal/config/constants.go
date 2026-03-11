@@ -318,6 +318,10 @@ var WindowTitlePosition = "bottom"
 // Set via --hide-clock flag or appearance.hide_clock config
 var HideClock = false
 
+// SnapOnDragToEdge controls whether dragging a window to screen edges snaps it (fullscreen, halves, quarters)
+// Set via appearance.snap_on_drag_to_edge config
+var SnapOnDragToEdge = true
+
 // ScrollbackLines controls the number of lines to keep in scrollback buffer
 // Set via --scrollback-lines flag or appearance.scrollback_lines config
 var ScrollbackLines = 10000

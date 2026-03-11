@@ -192,6 +192,11 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 		}
 	}
 
+	defaultBg := color.Color(nil)
+	if window.Terminal != nil {
+		defaultBg = window.Terminal.BackgroundColor()
+	}
+
 	safeColorEquals := func(a, b color.Color) (result bool) {
 		defer func() {
 			if recover() != nil {
@@ -463,7 +468,8 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 			isSelectionCursor := m.SelectionMode && !inTerminalMode && isFocused &&
 				x == window.SelectionCursor.X && y == window.SelectionCursor.Y
 
-			needsStyling := shouldApplyStyle(cell) || isCursorPos || isSelected || isSelectionCursor
+			needsStyling := shouldApplyStyle(cell) || isCursorPos || isSelected || isSelectionCursor ||
+				(cell != nil && cell.Style.Bg == nil && defaultBg != nil)
 
 			if x > 0 && !styleMatches(cell, isCursorPos, isSelected, isSelectionCursor) {
 				flushBatch(lineBuilder)
@@ -473,9 +479,9 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 				if batchBuilder.Len() == 0 {
 					if isSelected || isSelectionCursor {
 						if useOptimizedRendering {
-							currentStyle = buildOptimizedCellStyleCached(cell)
+							currentStyle = buildOptimizedCellStyleCached(cell, defaultBg)
 						} else {
-							currentStyle = buildCellStyleCached(cell, isCursorPos)
+							currentStyle = buildCellStyleCached(cell, isCursorPos, defaultBg)
 						}
 
 						if isSelected {
@@ -487,9 +493,9 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 						}
 					} else {
 						if useOptimizedRendering {
-							currentStyle = buildOptimizedCellStyleCached(cell)
+							currentStyle = buildOptimizedCellStyleCached(cell, defaultBg)
 						} else {
-							currentStyle = buildCellStyleCached(cell, isCursorPos)
+							currentStyle = buildCellStyleCached(cell, isCursorPos, defaultBg)
 						}
 					}
 					batchHasStyle = true

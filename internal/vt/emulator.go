@@ -652,6 +652,9 @@ func (e *Emulator) SetDefaultBackgroundColor(c color.Color) {
 		c = color.Black
 	}
 	e.defaultBg = c
+	if e.scr != nil {
+		e.scr.cur.Pen.Bg = c
+	}
 }
 
 // CursorColor returns the terminal's cursor color. This returns nil if the

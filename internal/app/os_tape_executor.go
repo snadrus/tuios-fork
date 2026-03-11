@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,6 +61,28 @@ func (m *OS) GetFocusedWindowID() string {
 		return m.Windows[m.FocusedWindow].ID
 	}
 	return ""
+}
+
+// SetWindowBackgroundColor sets the VT emulator's default background for a window.
+// hexRRGGBB is 6 hex digits (e.g. "0a0a0b"). Does not send anything through the shell.
+func (m *OS) SetWindowBackgroundColor(windowID string, hexRRGGBB string) error {
+	if len(hexRRGGBB) != 6 {
+		return fmt.Errorf("hex color must be 6 digits (RRGGBB)")
+	}
+	r, _ := strconv.ParseUint(hexRRGGBB[0:2], 16, 8)
+	g, _ := strconv.ParseUint(hexRRGGBB[2:4], 16, 8)
+	b, _ := strconv.ParseUint(hexRRGGBB[4:6], 16, 8)
+	c := color.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+
+	for _, w := range m.Windows {
+		if w.ID == windowID && w.Terminal != nil {
+			w.Terminal.SetDefaultBackgroundColor(c)
+			w.Terminal.SetBackgroundColor(c)
+			m.MarkAllDirty()
+			return nil
+		}
+	}
+	return fmt.Errorf("window not found: %s", windowID)
 }
 
 // SendToWindow sends bytes to a window's PTY.

@@ -38,6 +38,7 @@ type AppearanceConfig struct {
 	WhichKeyPosition    string `toml:"whichkey_position"`     // Which-key popup position: bottom-right, bottom-left, top-right, top-left, center (default: bottom-right)
 	WindowTitlePosition string `toml:"window_title_position"` // Window title position: bottom, top, hidden (default: bottom). Shows CustomName if set, else terminal title.
 	HideClock           bool   `toml:"hide_clock"`            // Hide the clock overlay (default: false)
+	SnapOnDragToEdge    *bool  `toml:"snap_on_drag_to_edge"`  // Snap windows when dragging to screen edges (default: true)
 }
 
 // KeybindingsConfig holds all keybinding configurations
@@ -511,6 +512,11 @@ func fillMissingAppearance(cfg, defaultCfg *UserConfig) {
 	// Only apply from config if not already set via flag (run.go sets this before fillMissingAppearance is called)
 	if !HideClock {
 		HideClock = cfg.Appearance.HideClock
+	}
+
+	// SnapOnDragToEdge defaults to true (nil means use default)
+	if cfg.Appearance.SnapOnDragToEdge != nil {
+		SnapOnDragToEdge = *cfg.Appearance.SnapOnDragToEdge
 	}
 }
 

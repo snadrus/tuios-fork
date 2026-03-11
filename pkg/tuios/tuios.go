@@ -288,6 +288,19 @@ func newModel(options Options) *Model {
 		}
 	}
 
+	// Apply UserConfig appearance settings to global config (library path skips fillMissingAppearance)
+	if userConfig != nil {
+		if userConfig.Appearance.WindowTitlePosition != "" {
+			config.WindowTitlePosition = userConfig.Appearance.WindowTitlePosition
+		}
+		if userConfig.Appearance.HideClock {
+			config.HideClock = true
+		}
+		if userConfig.Appearance.SnapOnDragToEdge != nil {
+			config.SnapOnDragToEdge = *userConfig.Appearance.SnapOnDragToEdge
+		}
+	}
+
 	// Create keybind registry
 	keybindRegistry := config.NewKeybindRegistry(userConfig)
 

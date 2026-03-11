@@ -719,15 +719,13 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		o.DraggedWindowIndex = -1
 	}
 
-	// Handle window edge snapping in floating mode (non-tiling)
-	if o.Dragging && !o.AutoTiling && o.DraggedWindowIndex >= 0 && o.DraggedWindowIndex < len(o.Windows) {
+	// Handle window edge snapping in floating mode (non-tiling), when enabled
+	if config.SnapOnDragToEdge && o.Dragging && !o.AutoTiling && o.DraggedWindowIndex >= 0 && o.DraggedWindowIndex < len(o.Windows) {
 		mouse := msg.Mouse()
 		dragDistance := abs(mouse.X-o.DragStartX) + abs(mouse.Y-o.DragStartY)
 		const dragThreshold = 5
 
 		if dragDistance >= dragThreshold {
-			// Detect edge zones for snapping
-			// Edge zone is within edgeSize pixels of screen edge
 			const edgeSize = 5
 			topMargin := o.GetTopMargin()
 			usableHeight := o.GetUsableHeight()
@@ -741,25 +739,18 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 			snapTo := app.NoSnap
 
 			if atTop && !atLeft && !atRight {
-				// Top center - fullscreen
 				snapTo = app.SnapFullScreen
 			} else if atLeft && !atTop && !atBottom {
-				// Left middle - snap left half
 				snapTo = app.SnapLeft
 			} else if atRight && !atTop && !atBottom {
-				// Right middle - snap right half
 				snapTo = app.SnapRight
 			} else if atTop && atLeft {
-				// Top-left corner - quarter
 				snapTo = app.SnapTopLeft
 			} else if atTop && atRight {
-				// Top-right corner - quarter
 				snapTo = app.SnapTopRight
 			} else if atBottom && atLeft {
-				// Bottom-left corner - quarter
 				snapTo = app.SnapBottomLeft
 			} else if atBottom && atRight {
-				// Bottom-right corner - quarter
 				snapTo = app.SnapBottomRight
 			}
 
