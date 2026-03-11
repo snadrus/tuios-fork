@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/pool"
 	"github.com/Gaurav-Gosain/tuios/internal/terminal"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -45,11 +46,11 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 	builder := pool.GetStringBuilder()
 	defer pool.PutStringBuilder(builder)
 
-	estimatedSize := window.Width * (window.Height - 1)
+	estimatedSize := config.TerminalWidth(window.Width) * config.TerminalHeight(window.Height)
 	builder.Grow(estimatedSize)
 
-	maxY := min(window.Height-1, screen.Height())
-	maxX := min(window.Width, screen.Width())
+	maxY := min(config.TerminalHeight(window.Height), screen.Height())
+	maxX := min(config.TerminalWidth(window.Width), screen.Width())
 
 	useOptimizedRendering := !isFocused && !inTerminalMode
 
@@ -529,8 +530,8 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 }
 
 func (m *OS) renderResizeIndicator(window *terminal.Window) string {
-	termWidth := max(window.Width, 1)
-	termHeight := max(window.Height-1, 1)
+	termWidth := config.TerminalWidth(window.Width)
+	termHeight := config.TerminalHeight(window.Height)
 
 	resizeMsg := fmt.Sprintf("Resizing... %dx%d", termWidth, termHeight)
 

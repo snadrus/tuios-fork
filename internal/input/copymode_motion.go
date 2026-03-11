@@ -2,6 +2,7 @@
 package input
 
 import (
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/terminal"
 	uv "github.com/charmbracelet/ultraviolet"
 )
@@ -46,7 +47,7 @@ func moveLeft(cm *terminal.CopyMode, window *terminal.Window) {
 }
 
 func moveRight(cm *terminal.CopyMode, window *terminal.Window) {
-	maxX := window.Width - 3
+	maxX := config.TerminalWidth(window.Width) - 1
 	if cm.CursorX < maxX {
 		cm.CursorX++
 		// Skip continuation cells (Width=0) of wide characters
@@ -97,7 +98,7 @@ func moveDown(cm *terminal.CopyMode, window *terminal.Window) {
 
 // moveWordForward moves cursor to next word
 func moveWordForward(cm *terminal.CopyMode, window *terminal.Window) {
-	maxWidth := window.Width - 3
+	maxWidth := config.TerminalWidth(window.Width) - 1
 	maxIterations := 1000 // Prevent infinite loops
 
 	// Get current character type
@@ -159,7 +160,7 @@ func moveWordForward(cm *terminal.CopyMode, window *terminal.Window) {
 
 // moveWordBackward moves cursor to previous word
 func moveWordBackward(cm *terminal.CopyMode, window *terminal.Window) {
-	maxWidth := window.Width - 3
+	maxWidth := config.TerminalWidth(window.Width) - 1
 	maxIterations := 1000
 
 	// Move left at least once to leave current position
@@ -248,7 +249,7 @@ func moveWordBackward(cm *terminal.CopyMode, window *terminal.Window) {
 
 // moveWordEnd moves cursor to end of current word
 func moveWordEnd(cm *terminal.CopyMode, window *terminal.Window) {
-	maxWidth := window.Width - 3
+	maxWidth := config.TerminalWidth(window.Width) - 1
 	maxIterations := 1000
 
 	// Move right at least once to leave current position
@@ -315,7 +316,7 @@ func moveWordEnd(cm *terminal.CopyMode, window *terminal.Window) {
 // moveWordForwardBig moves cursor to next WORD (whitespace-delimited)
 func moveWordForwardBig(cm *terminal.CopyMode, window *terminal.Window) {
 	// Like 'w' but treats any whitespace-delimited sequence as a word
-	maxWidth := window.Width - 3
+	maxWidth := config.TerminalWidth(window.Width) - 1
 	maxIterations := 1000
 
 	// Phase 1: Skip current WORD (any non-whitespace)
@@ -353,7 +354,7 @@ func moveWordForwardBig(cm *terminal.CopyMode, window *terminal.Window) {
 // moveWordBackwardBig moves cursor to previous WORD (whitespace-delimited)
 func moveWordBackwardBig(cm *terminal.CopyMode, window *terminal.Window) {
 	// Like 'b' but for WORDs
-	maxWidth := window.Width - 3
+	maxWidth := config.TerminalWidth(window.Width) - 1
 	maxIterations := 1000
 
 	// Move left at least once
@@ -417,7 +418,7 @@ func moveWordBackwardBig(cm *terminal.CopyMode, window *terminal.Window) {
 // moveWordEndBig moves cursor to end of current WORD
 func moveWordEndBig(cm *terminal.CopyMode, window *terminal.Window) {
 	// Like 'e' but for WORDs
-	maxWidth := window.Width - 3
+	maxWidth := config.TerminalWidth(window.Width) - 1
 	maxIterations := 1000
 
 	// Move right at least once
@@ -492,7 +493,7 @@ func moveHalfPageDown(cm *terminal.CopyMode, window *terminal.Window) {
 
 // movePageUp moves cursor full page up
 func movePageUp(cm *terminal.CopyMode, window *terminal.Window) {
-	lines := max(1, window.Height-1)
+	lines := max(1, config.TerminalHeight(window.Height))
 	for range lines {
 		moveUp(cm, window)
 	}
@@ -500,7 +501,7 @@ func movePageUp(cm *terminal.CopyMode, window *terminal.Window) {
 
 // movePageDown moves cursor full page down
 func movePageDown(cm *terminal.CopyMode, window *terminal.Window) {
-	lines := max(1, window.Height-1)
+	lines := max(1, config.TerminalHeight(window.Height))
 	for range lines {
 		moveDown(cm, window)
 	}
@@ -674,7 +675,7 @@ func moveToMatchingBracket(cm *terminal.CopyMode, window *terminal.Window) {
 		// Move in search direction
 		if direction > 0 {
 			// Moving forward
-			if cm.CursorX < window.Width-3 {
+			if cm.CursorX < config.TerminalWidth(window.Width)-1 {
 				cm.CursorX++
 			} else {
 				// Wrap to next line
@@ -694,7 +695,7 @@ func moveToMatchingBracket(cm *terminal.CopyMode, window *terminal.Window) {
 				cm.CursorX--
 			} else {
 				// Wrap to previous line
-				cm.CursorX = window.Width - 3
+				cm.CursorX = config.TerminalWidth(window.Width) - 1
 				if cm.CursorY > 0 {
 					cm.CursorY--
 				} else if cm.ScrollOffset < window.ScrollbackLen() {

@@ -28,7 +28,7 @@ type DaemonConfig struct {
 
 // AppearanceConfig holds appearance-related settings
 type AppearanceConfig struct {
-	BorderStyle         string `toml:"border_style"`          // Border style: rounded, normal, thick, double, hidden, block, ascii, outer-half-block, inner-half-block (borderless mode not yet implemented)
+	BorderStyle         string `toml:"border_style"`          // Border style: none (default, title-bar only), rounded, normal, thick, double, hidden, block, ascii, outer-half-block, inner-half-block
 	HideWindowButtons   bool   `toml:"hide_window_buttons"`   // Hide window control buttons (minimize, maximize, close)
 	ScrollbackLines     int    `toml:"scrollback_lines"`      // Number of lines to keep in scrollback buffer (default: 10000, min: 100, max: 1000000)
 	DockbarPosition     string `toml:"dockbar_position"`      // Dockbar position: bottom, top, hidden
@@ -66,7 +66,7 @@ type KeybindingsConfig struct {
 func DefaultConfig() *UserConfig {
 	cfg := &UserConfig{
 		Appearance: AppearanceConfig{
-			BorderStyle:       "rounded",
+			BorderStyle:       "none",
 			HideWindowButtons: false,
 			ScrollbackLines:   10000,
 			DockbarPosition:   "bottom",
@@ -437,9 +437,10 @@ func createDefaultConfig() (*UserConfig, error) {
 	sb.WriteString("# APPEARANCE SETTINGS\n")
 	sb.WriteString("# ============================================================================\n")
 	sb.WriteString("# border_style: Window border style\n")
-	sb.WriteString("#   Options: rounded, normal, thick, double, hidden, block, ascii,\n")
-	sb.WriteString("#            outer-half-block, inner-half-block\n")
-	sb.WriteString("#   Default: rounded\n")
+	sb.WriteString("#   none (default): title-bar only, no side or bottom borders\n")
+	sb.WriteString("#   Other options: rounded, normal, thick, double, hidden, block, ascii,\n")
+	sb.WriteString("#                  outer-half-block, inner-half-block\n")
+	sb.WriteString("#   Default: none\n")
 	sb.WriteString("#\n")
 	sb.WriteString("# dockbar_position: Position of the dockbar\n")
 	sb.WriteString("#   Options: bottom, top, hidden\n")

@@ -26,6 +26,9 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 		Align(lipgloss.Left).
 		AlignVertical(lipgloss.Top).
 		Foreground(lipgloss.Color("#FFFFFF"))
+	if config.HasSideBorders() {
+		box = box.Border(getBorder()).BorderTop(false)
+	}
 
 	for i := range m.Windows {
 		window := m.Windows[i]
@@ -182,20 +185,20 @@ func (m *OS) GetKittyGraphicsCmd() tea.Cmd {
 					if w.Terminal != nil {
 						scrollbackLen = w.Terminal.ScrollbackLen()
 					}
-					result[w.ID] = &WindowPositionInfo{
-						WindowX:            w.X,
-						WindowY:            w.Y,
-						ContentOffsetX:     0,
-						ContentOffsetY:     1,
-						Width:              w.Width,
-						Height:             w.Height,
-						Visible:            true,
-						ScrollbackLen:      scrollbackLen,
-						ScrollOffset:       w.ScrollbackOffset,
-						IsBeingManipulated: w.IsBeingManipulated,
-						WindowZ:            w.Z,
-						IsAltScreen:        w.IsAltScreen,
-					}
+				result[w.ID] = &WindowPositionInfo{
+					WindowX:            w.X,
+					WindowY:            w.Y,
+					ContentOffsetX:     config.ContentOffsetX(),
+					ContentOffsetY:     1,
+					Width:              w.Width,
+					Height:             w.Height,
+					Visible:            true,
+					ScrollbackLen:      scrollbackLen,
+					ScrollOffset:       w.ScrollbackOffset,
+					IsBeingManipulated: w.IsBeingManipulated,
+					WindowZ:            w.Z,
+					IsAltScreen:        w.IsAltScreen,
+				}
 				}
 			}
 			return result
@@ -231,12 +234,12 @@ func (m *OS) GetSixelGraphicsCmd() tea.Cmd {
 					if w.Terminal != nil {
 						scrollbackLen = w.Terminal.ScrollbackLen()
 					}
-				return &WindowPositionInfo{
-					WindowX:            w.X,
-					WindowY:            w.Y,
-					ContentOffsetX:     0,
-					ContentOffsetY:     1,
-						Width:              w.Width,
+			return &WindowPositionInfo{
+				WindowX:            w.X,
+				WindowY:            w.Y,
+				ContentOffsetX:     config.ContentOffsetX(),
+				ContentOffsetY:     1,
+					Width:              w.Width,
 						Height:             w.Height,
 						Visible:            true,
 						ScrollbackLen:      scrollbackLen,

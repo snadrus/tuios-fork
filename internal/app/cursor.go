@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/vt"
 )
 
@@ -27,16 +28,16 @@ func (m *OS) getRealCursor() *tea.Cursor {
 	}
 
 	pos := window.Terminal.CursorPosition()
-	contentWidth := window.Width // no side borders
-	contentHeight := window.Height - 1 // top border only
+	contentWidth := config.TerminalWidth(window.Width)
+	contentHeight := config.TerminalHeight(window.Height)
 
 	// Bounds check - cursor must be within visible content area
 	if pos.X < 0 || pos.X >= contentWidth || pos.Y < 0 || pos.Y >= contentHeight {
 		return nil
 	}
 
-	// Transform to screen coordinates (+1 for top border, no left border offset)
-	screenX := window.X + pos.X
+	// Transform to screen coordinates: +1 for title bar row, +ContentOffsetX for optional left border
+	screenX := window.X + config.ContentOffsetX() + pos.X
 	screenY := window.Y + 1 + pos.Y
 
 	cursor := tea.NewCursor(screenX, screenY)

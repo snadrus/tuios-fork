@@ -1,12 +1,9 @@
 package app
 
 import (
-	"encoding/json"
 	"image/color"
-	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/tuios/internal/config"
@@ -15,26 +12,6 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
-
-// #region agent log
-var _debugLogCount int
-
-func debugLog(payload map[string]any) {
-	if _debugLogCount >= 5 {
-		return
-	}
-	_debugLogCount++
-	payload["timestamp"] = time.Now().UnixMilli()
-	b, _ := json.Marshal(payload)
-	f, err := os.OpenFile("/GitHub/tuitop/.cursor/debug-a1ba88.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer func() { _ = f.Close() }()
-	_, _ = f.Write(append(b, '\n'))
-}
-
-// #endregion
 
 // Deprecated: Use config.GetWindowPillLeft() instead
 const (
@@ -54,7 +31,8 @@ func getNormalBorder() lipgloss.Border {
 	return getBorder()
 }
 
-// RightString returns a right-aligned string with decorative borders.
+// RightString returns a right-aligned string on the top border line.
+// With side borders (BorderStyle != "none") it wraps the line in ╭/╮ corner characters.
 // windowBg optionally colors the left padding to match the window body when non-nil.
 func RightString(str string, width int, color color.Color, windowBg ...color.Color) string {
 	spaces := width - lipgloss.Width(str)
@@ -69,6 +47,11 @@ func RightString(str string, width int, color color.Color, windowBg ...color.Col
 	padStyle := fg
 	if len(windowBg) > 0 && windowBg[0] != nil {
 		padStyle = fg.Background(windowBg[0])
+	}
+	if config.HasSideBorders() {
+		return padStyle.Render(config.GetWindowBorderTopLeft()+strings.Repeat(config.GetWindowBorderTop(), spaces)) +
+			str +
+			fg.Render(config.GetWindowBorderTopRight())
 	}
 	return padStyle.Render(strings.Repeat(config.GetWindowBorderTop(), spaces)) + str
 }
@@ -151,11 +134,15 @@ func renderTitleWithButtons(windowName string, buttons string, width int, color 
 	borderStyle := style.Foreground(color)
 	nameStyle := style.Foreground(titleFg).Background(color)
 
-	var borderChar string
+	var borderLeft, borderChar, borderRight string
 	if isTop {
+		borderLeft = config.GetWindowBorderTopLeft()
 		borderChar = config.GetWindowBorderTop()
+		borderRight = config.GetWindowBorderTopRight()
 	} else {
+		borderLeft = config.GetWindowBorderBottomLeft()
 		borderChar = config.GetWindowBorderBottom()
+		borderRight = config.GetWindowBorderBottomRight()
 	}
 
 	// Build name badge
@@ -180,6 +167,13 @@ func renderTitleWithButtons(windowName string, buttons string, width int, color 
 		gapStyle = borderStyle.Background(windowBg)
 	}
 
+	if config.HasSideBorders() {
+		return borderStyle.Render(borderLeft) +
+			nameBadge +
+			gapStyle.Render(strings.Repeat(borderChar, middlePadding)) +
+			buttons +
+			borderStyle.Render(borderRight)
+	}
 	return nameBadge +
 		gapStyle.Render(strings.Repeat(borderChar, middlePadding)) +
 		buttons
@@ -229,52 +223,8 @@ func renderTitleBadge(windowName string, width int, color color.Color, isTop boo
 
 func addToBorder(content string, borderColor color.Color, titleFg color.Color, window *terminal.Window, isRenaming bool, renameBuffer string, isTiling bool) string {
 	contentWidth := lipgloss.Width(content)
-	width := max(contentWidth, 0)
+	width := max(contentWidth-config.ContentBorderWidth(), 0)
 	titlePos := config.WindowTitlePosition
-
-	// #region agent log
-	if window != nil {
-		lines := strings.Split(content, "\n")
-		firstLine, lastLine := "", ""
-		if len(lines) > 0 {
-			firstLine = lines[0]
-			lastLine = lines[len(lines)-1]
-		}
-		firstLineVisible := ansi.Strip(firstLine)
-		lastLineVisible := ansi.Strip(lastLine)
-		fvr := []rune(firstLineVisible)
-		lvr := []rune(lastLineVisible)
-		firstVisibleSuffix := ""
-		lastVisibleSuffix := ""
-		if len(fvr) >= 2 {
-			firstVisibleSuffix = string(fvr[max(0, len(fvr)-2):])
-		}
-		if len(lvr) >= 2 {
-			lastVisibleSuffix = string(lvr[max(0, len(lvr)-2):])
-		}
-		vtW, vtH := 0, 0
-		if window.Terminal != nil {
-			vtW = window.Terminal.Width()
-			vtH = window.Terminal.Height()
-		}
-		debugLog(map[string]any{
-			"sessionId":           "a1ba88",
-			"hypothesisId":        "E",
-			"location":            "render_helpers.go:addToBorder",
-			"message":             "VT emulator vs window dimensions",
-			"data": map[string]any{
-				"windowWidth":         window.Width,
-				"windowHeight":        window.Height,
-				"contentWidth":        contentWidth,
-				"numLines":            len(lines),
-				"vtEmulatorWidth":     vtW,
-				"vtEmulatorHeight":    vtH,
-				"firstVisibleSuffix":  firstVisibleSuffix,
-				"lastVisibleSuffix":   lastVisibleSuffix,
-			},
-		})
-	}
-	// #endregion
 
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
@@ -305,11 +255,11 @@ func addToBorder(content string, borderColor color.Color, titleFg color.Color, w
 		buttonsWidth = lipgloss.Width(buttons)
 	}
 
-	// Calculate available width for title based on position
+	// Calculate available width for title based on position.
+	// ContentBorderWidth() accounts for corner chars (╭/╮) that are present in side-border mode.
 	var titleMaxWidth int
 	if titlePos == "top" {
-		// Title on top shares space with buttons
-		titleMaxWidth = width - buttonsWidth
+		titleMaxWidth = width - buttonsWidth - config.ContentBorderWidth()
 	} else {
 		titleMaxWidth = width
 	}
@@ -318,6 +268,8 @@ func addToBorder(content string, borderColor color.Color, titleFg color.Color, w
 	if titlePos != "hidden" {
 		windowName = getWindowTitle(window, isRenaming, renameBuffer, titleMaxWidth)
 	}
+
+	borderStyle := style.Foreground(borderColor)
 
 	// Build top border
 	var topBorder string
@@ -329,25 +281,24 @@ func addToBorder(content string, borderColor color.Color, titleFg color.Color, w
 		topBorder = RightString(buttons, width, borderColor, windowBg)
 	}
 
-	// #region agent log
-	if window != nil {
-		debugLog(map[string]any{
-			"sessionId":    "a1ba88",
-			"hypothesisId": "A",
-			"location":     "render_helpers.go:topBorder",
-			"message":      "top border vs content width",
-			"data": map[string]any{
-				"topBorderWidth": lipgloss.Width(topBorder),
-				"contentWidth":   contentWidth,
-				"derivedWidth":   width,
-				"windowWidth":    window.Width,
-				"runId":          "post-fix-corners",
-			},
-		})
+	if !config.HasSideBorders() {
+		// Borderless: only the title bar row; content fills the rest
+		return topBorder + "\n" + content
 	}
-	// #endregion
 
-	return topBorder + "\n" + content
+	// Side-border mode: replace the last line of the Lipgloss-rendered box with a styled bottom border
+	var bottomBorder string
+	if titlePos == "bottom" && windowName != "" {
+		bottomBorder = renderTitleBadge(windowName, width, borderColor, false)
+	} else {
+		bottomBorder = borderStyle.Render(config.GetWindowBorderBottomLeft() + strings.Repeat(config.GetWindowBorderBottom(), width) + config.GetWindowBorderBottomRight())
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 {
+		lines[len(lines)-1] = bottomBorder
+	}
+	return topBorder + "\n" + strings.Join(lines, "\n")
 }
 
 func styleToANSI(s lipgloss.Style) (prefix string, suffix string) {

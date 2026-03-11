@@ -227,9 +227,9 @@ func NewWindow(id, title string, x, y, width, height, z int, exitChan chan strin
 		title = "Terminal " + id[:8]
 	}
 
-	// Create VT terminal with inner dimensions (top border only)
-	terminalWidth := max(width, 1)
-	terminalHeight := max(height-1, 1)
+	// Create VT terminal with dimensions based on border configuration
+	terminalWidth := config.TerminalWidth(width)
+	terminalHeight := config.TerminalHeight(height)
 	// Create terminal with scrollback buffer support
 	terminal := vt.NewEmulator(terminalWidth, terminalHeight)
 	// Set scrollback buffer size from config (default: 10000, configurable via --scrollback-lines or config file)
@@ -923,24 +923,11 @@ func (w *Window) Resize(width, height int) {
 		return
 	}
 
-	termWidth := max(width, 1)
-	termHeight := max(height-1, 1)
+	termWidth := config.TerminalWidth(width)
+	termHeight := config.TerminalHeight(height)
 
 	// Check if size actually changed
 	sizeChanged := w.Width != width || w.Height != height
-
-	// #region agent log
-	{
-		import_enc := func() {}; _ = import_enc
-		f, err := os.OpenFile("/GitHub/tuitop/.cursor/debug-a1ba88.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err == nil {
-			t := time.Now().UnixMilli()
-			line := fmt.Sprintf(`{"sessionId":"a1ba88","hypothesisId":"Resize","location":"window.go:Resize","message":"resize called","runId":"post-fix","data":{"windowWidth":%d,"windowHeight":%d,"termWidth":%d,"termHeight":%d,"sizeChanged":%v},"timestamp":%d}`+"\n", width, height, termWidth, termHeight, sizeChanged, t)
-			_, _ = f.Write([]byte(line))
-			_ = f.Close()
-		}
-	}
-	// #endregion
 
 	w.Terminal.Resize(termWidth, termHeight)
 	if w.Pty != nil {
@@ -983,9 +970,7 @@ func (w *Window) ResizeVisual(width, height int) {
 	// This prevents the "stuck" height and dimension mismatch issues during drag.
 	// PTY resize is still deferred until mouse release (via pending resizes).
 	if w.Terminal != nil {
-		termWidth := max(width, 1)
-		termHeight := max(height-1, 1)
-		w.Terminal.Resize(termWidth, termHeight)
+		w.Terminal.Resize(config.TerminalWidth(width), config.TerminalHeight(height))
 	}
 
 	w.MarkPositionDirty()
@@ -1003,8 +988,8 @@ func (w *Window) SetCellPixelDimensions(cellWidth, cellHeight int) {
 	w.Terminal.SetCellSize(cellWidth, cellHeight)
 
 	if w.Pty != nil && cellWidth > 0 && cellHeight > 0 {
-		termWidth := max(w.Width, 1)
-		termHeight := max(w.Height-1, 1)
+		termWidth := config.TerminalWidth(w.Width)
+		termHeight := config.TerminalHeight(w.Height)
 		xpixel := termWidth * cellWidth
 		ypixel := termHeight * cellHeight
 		_ = w.SetPtyPixelSize(termWidth, termHeight, xpixel, ypixel)

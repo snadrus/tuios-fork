@@ -300,7 +300,8 @@ func GetFastAnimationDuration() time.Duration {
 
 // BorderStyle controls which border style to use for windows
 // Set via --border-style flag or appearance.border_style config
-var BorderStyle = "rounded"
+// "none" removes side and bottom borders, showing only the title bar (recommended for a clean look).
+var BorderStyle = "none"
 
 // DockbarPosition controls the position of the dockbar
 // Set via --dockbar-position flag or appearance.dockbar_position config
@@ -475,11 +476,58 @@ func GetBorderForStyle() lipgloss.Border {
 		return lipgloss.OuterHalfBlockBorder()
 	case "inner-half-block":
 		return lipgloss.InnerHalfBlockBorder()
+	case "none":
+		return lipgloss.HiddenBorder()
 	case "rounded":
 		fallthrough
 	default:
 		return lipgloss.RoundedBorder()
 	}
+}
+
+// HasSideBorders returns true when the current border style includes left, right, and bottom borders.
+// When false (BorderStyle == "none"), only the title bar is rendered; the terminal content
+// fills the full window width and all but one row of the height.
+func HasSideBorders() bool {
+	return BorderStyle != "none"
+}
+
+// TerminalWidth returns the correct PTY/VT emulator column count for a given window width.
+// With side borders, two columns are reserved for the left and right border characters.
+// Without side borders ("none"), the full window width is available.
+func TerminalWidth(windowWidth int) int {
+	if HasSideBorders() {
+		return max(windowWidth-2, 1)
+	}
+	return max(windowWidth, 1)
+}
+
+// TerminalHeight returns the correct PTY/VT emulator row count for a given window height.
+// One row is always reserved for the title bar. With side borders an additional row is
+// reserved for the bottom border.
+func TerminalHeight(windowHeight int) int {
+	if HasSideBorders() {
+		return max(windowHeight-2, 1)
+	}
+	return max(windowHeight-1, 1)
+}
+
+// ContentOffsetX returns the column offset from the window's left edge to the terminal content area.
+// With side borders this is 1 (left border character). Without side borders it is 0.
+func ContentOffsetX() int {
+	if HasSideBorders() {
+		return 1
+	}
+	return 0
+}
+
+// ContentBorderWidth returns the total horizontal space (in columns) occupied by left+right borders.
+// This is 2 with side borders and 0 without.
+func ContentBorderWidth() int {
+	if HasSideBorders() {
+		return 2
+	}
+	return 0
 }
 
 // Window decoration getter functions

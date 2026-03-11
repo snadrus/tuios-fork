@@ -7,6 +7,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"golang.org/x/sys/unix"
 )
 
@@ -24,8 +25,8 @@ func TestSetPtyPixelSize(t *testing.T) {
 
 	cellWidth := 10
 	cellHeight := 20
-	termWidth := 78
-	termHeight := 22
+	termWidth := config.TerminalWidth(80)
+	termHeight := config.TerminalHeight(24)
 	xpixel := termWidth * cellWidth
 	ypixel := termHeight * cellHeight
 
@@ -90,8 +91,8 @@ func TestSetCellPixelDimensions(t *testing.T) {
 	t.Logf("PTY size after SetCellPixelDimensions: cols=%d, rows=%d, xpixel=%d, ypixel=%d",
 		ws.Col, ws.Row, ws.Xpixel, ws.Ypixel)
 
-	termWidth := 80
-	termHeight := 23
+	termWidth := config.TerminalWidth(80)
+	termHeight := config.TerminalHeight(24)
 	expectedXpixel := termWidth * 10
 	expectedYpixel := termHeight * 20
 

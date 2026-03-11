@@ -81,7 +81,9 @@ type Options struct {
 	Workspaces int
 
 	// BorderStyle sets the window border style.
-	// Valid values: "rounded", "normal", "thick", "double", "hidden", "block", "ascii"
+	// "none" (default) shows only the title bar with no side or bottom borders.
+	// Other valid values: "rounded", "normal", "thick", "double", "hidden", "block", "ascii",
+	// "outer-half-block", "inner-half-block".
 	BorderStyle string
 
 	// DockbarPosition sets where the dockbar appears.

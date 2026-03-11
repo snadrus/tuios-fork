@@ -1218,9 +1218,9 @@ func (m *OS) MoveSelectionCursor(window *terminal.Window, dx, dy int, extending 
 		return
 	}
 
-	// Get terminal dimensions (account for top border only)
-	maxX := window.Width
-	maxY := window.Height - 1
+	// Get terminal dimensions based on border configuration
+	maxX := config.TerminalWidth(window.Width)
+	maxY := config.TerminalHeight(window.Height)
 
 	// Initialize selection cursor if not set (only for non-extending moves)
 	if !extending && !window.IsSelecting {
@@ -1331,7 +1331,7 @@ func (m *OS) extractSelectedText(window *terminal.Window) string {
 
 		// Determine start and end columns for this line
 		lineStartX := 0
-		lineEndX := window.Width // No side borders
+		lineEndX := config.TerminalWidth(window.Width)
 
 		if y == startY {
 			lineStartX = startX
@@ -1341,7 +1341,7 @@ func (m *OS) extractSelectedText(window *terminal.Window) string {
 		}
 
 		// Extract characters from the terminal for this line
-		for x := lineStartX; x <= lineEndX && x < window.Width; x++ {
+		for x := lineStartX; x <= lineEndX && x < config.TerminalWidth(window.Width); x++ {
 			// Get the cell from the terminal at this position
 			cell := window.Terminal.CellAt(x, y)
 			if cell != nil && cell.Content != "" {

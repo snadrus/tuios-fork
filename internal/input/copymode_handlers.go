@@ -152,7 +152,7 @@ func handleNormalInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 	case "^":
 		cm.CursorX = 0 // Could be enhanced to skip leading whitespace
 	case "$":
-		cm.CursorX = max(0, window.Width-3) // Account for borders
+		cm.CursorX = max(0, config.TerminalWidth(window.Width)-1) // Account for borders
 
 	// Navigation - page movement
 	case "ctrl+u":
@@ -218,7 +218,7 @@ func handleNormalInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 		cm.CursorY = window.Height / 2
 	case "L":
 		// Move to bottom of screen
-		cm.CursorY = window.Height - 3
+		cm.CursorY = config.TerminalHeight(window.Height) - 1
 
 	// Navigation - paragraph movement
 	case "{":
@@ -531,7 +531,7 @@ func handleVisualInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 		cm.CursorX = 0
 		updateVisualEnd(cm, window)
 	case "$":
-		cm.CursorX = max(0, window.Width-3)
+		cm.CursorX = max(0, config.TerminalWidth(window.Width)-1)
 		updateVisualEnd(cm, window)
 
 	// Page movement
@@ -564,7 +564,7 @@ func handleVisualInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 		cm.CursorY = window.Height / 2
 		updateVisualEnd(cm, window)
 	case "L":
-		cm.CursorY = window.Height - 3
+		cm.CursorY = config.TerminalHeight(window.Height) - 1
 		updateVisualEnd(cm, window)
 
 	// Paragraph movement
@@ -604,11 +604,11 @@ func handleVisualInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 // HandleCopyModeMouseClick handles mouse clicks in copy mode
 func HandleCopyModeMouseClick(cm *terminal.CopyMode, window *terminal.Window, clickX, clickY int) {
 	// Convert window-relative coordinates (with border) to terminal coordinates
-	terminalX := clickX - window.X // No left border
+	terminalX := clickX - window.X - config.ContentOffsetX()
 	terminalY := clickY - window.Y - 1 // Account for top border (title bar)
 
 	// Check bounds
-	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width || terminalY >= window.Height-1 {
+	if terminalX < 0 || terminalY < 0 || terminalX >= config.TerminalWidth(window.Width) || terminalY >= config.TerminalHeight(window.Height) {
 		return // Click outside terminal content area
 	}
 
@@ -637,11 +637,11 @@ func HandleCopyModeMouseClick(cm *terminal.CopyMode, window *terminal.Window, cl
 // HandleCopyModeMouseDrag handles mouse drag start in copy mode (initiates visual selection)
 func HandleCopyModeMouseDrag(cm *terminal.CopyMode, window *terminal.Window, startX, startY int) {
 	// Convert window-relative coordinates to terminal coordinates
-	terminalX := startX - window.X // No left border
+	terminalX := startX - window.X - config.ContentOffsetX()
 	terminalY := startY - window.Y - 1 // Account for top border
 
 	// Check bounds
-	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width || terminalY >= window.Height-1 {
+	if terminalX < 0 || terminalY < 0 || terminalX >= config.TerminalWidth(window.Width) || terminalY >= config.TerminalHeight(window.Height) {
 		return
 	}
 
@@ -679,11 +679,11 @@ func HandleCopyModeMouseMotion(cm *terminal.CopyMode, window *terminal.Window, m
 	}
 
 	// Convert window-relative coordinates to terminal coordinates
-	terminalX := mouseX - window.X // No left border
+	terminalX := mouseX - window.X - config.ContentOffsetX()
 	terminalY := mouseY - window.Y - 1 // Account for top border (title bar)
 
 	// Check bounds
-	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width || terminalY >= window.Height-1 {
+	if terminalX < 0 || terminalY < 0 || terminalX >= config.TerminalWidth(window.Width) || terminalY >= config.TerminalHeight(window.Height) {
 		return
 	}
 

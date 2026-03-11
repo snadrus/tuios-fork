@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/layout"
 	"github.com/Gaurav-Gosain/tuios/internal/session"
 	"github.com/Gaurav-Gosain/tuios/internal/terminal"
@@ -463,15 +464,15 @@ func (m *OS) updateWindowFromState(w *terminal.Window, ws *session.WindowState) 
 	if sizeChanged {
 		// Resize terminal emulator
 		if w.Terminal != nil {
-			termWidth := max(ws.Width, 1)
-			termHeight := max(ws.Height-1, 1)
+			termWidth := config.TerminalWidth(ws.Width)
+			termHeight := config.TerminalHeight(ws.Height)
 			w.Terminal.Resize(termWidth, termHeight)
 		}
 
 		// Resize PTY in daemon
 		if w.DaemonResizeFunc != nil {
-			termWidth := max(ws.Width, 1)
-			termHeight := max(ws.Height-1, 1)
+			termWidth := config.TerminalWidth(ws.Width)
+			termHeight := config.TerminalHeight(ws.Height)
 			_ = w.DaemonResizeFunc(termWidth, termHeight)
 		}
 
@@ -618,8 +619,8 @@ func (m *OS) RestoreTerminalStates() error {
 func (m *OS) TriggerAltScreenRedraws() {
 	for _, w := range m.Windows {
 		if w.DaemonMode && w.IsAltScreen {
-			termWidth := max(w.Width, 1)
-			termHeight := max(w.Height-1, 1)
+			termWidth := config.TerminalWidth(w.Width)
+			termHeight := config.TerminalHeight(w.Height)
 
 			// Ensure local VT emulator dimensions match
 			if w.Terminal != nil {
@@ -808,8 +809,8 @@ func (m *OS) AddDaemonWindow(title string) *OS {
 	}
 
 	// Calculate terminal dimensions (top border only)
-	termWidth := max(width, 1)
-	termHeight := max(height-1, 1)
+	termWidth := config.TerminalWidth(width)
+	termHeight := config.TerminalHeight(height)
 
 	// Create PTY in daemon
 	m.LogInfo("[DAEMON] Calling CreatePTY(%s, %d, %d)", title, termWidth, termHeight)
@@ -942,8 +943,8 @@ func (m *OS) ResizeDaemonPTY(window *terminal.Window, width, height int) error {
 	}
 
 	// Top border only
-	termWidth := max(width, 1)
-	termHeight := max(height-1, 1)
+	termWidth := config.TerminalWidth(width)
+	termHeight := config.TerminalHeight(height)
 
 	return m.DaemonClient.ResizePTY(window.PTYID, termWidth, termHeight)
 }

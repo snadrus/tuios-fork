@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/terminal"
 	"github.com/Gaurav-Gosain/tuios/internal/vt"
 )
@@ -424,8 +425,8 @@ func (kp *KittyPassthrough) forwardDirectTransmit(cmd *vt.KittyCommand, windowID
 	hostY := pending.WindowY + pending.ContentOffsetY + pending.CursorY
 
 	// Calculate content area dimensions
-	contentWidth := pending.WindowWidth
-	contentHeight := pending.WindowHeight - 1
+	contentWidth := config.TerminalWidth(pending.WindowWidth)
+	contentHeight := config.TerminalHeight(pending.WindowHeight)
 
 	// Calculate image dimensions in cells
 	imgRows := pending.Rows
@@ -608,8 +609,8 @@ func (kp *KittyPassthrough) forwardFileTransmit(cmd *vt.KittyCommand, windowID s
 	hostY := windowY + contentOffsetY + cursorY
 
 	// Calculate content area dimensions (top border only)
-	contentWidth := windowWidth
-	contentHeight := windowHeight - 1
+	contentWidth := config.TerminalWidth(windowWidth)
+	contentHeight := config.TerminalHeight(windowHeight)
 
 	// Calculate image dimensions in cells
 	// Note: calculateImageCells returns (rows, cols) in that order
@@ -753,8 +754,8 @@ func (kp *KittyPassthrough) forwardPlace(
 	hostID := kp.getOrAllocateHostID(windowID, cmd.ImageID)
 
 	// Calculate content area dimensions (top border only)
-	contentWidth := windowWidth
-	contentHeight := windowHeight - 1
+	contentWidth := config.TerminalWidth(windowWidth)
+	contentHeight := config.TerminalHeight(windowHeight)
 
 	// Calculate image dimensions and cap to content area
 	// Note: calculateImageCells returns (rows, cols) in that order
@@ -1124,8 +1125,8 @@ func (kp *KittyPassthrough) RefreshAllPlacements(getAllWindows func() map[string
 
 		// Calculate viewport dimensions (top border only)
 		viewportTop := info.ScrollbackLen - info.ScrollOffset
-		viewportHeight := info.Height - 1
-		viewportWidth := info.Width
+		viewportHeight := config.TerminalHeight(info.Height)
+		viewportWidth := config.TerminalWidth(info.Width)
 
 		// Collect IDs to delete (for altscreen cleanup)
 		var idsToDelete []uint32
