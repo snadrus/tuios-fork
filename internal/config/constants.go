@@ -2,6 +2,7 @@
 package config
 
 import (
+	"image/color"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -313,6 +314,14 @@ var HideWindowButtons = false
 // Options: bottom, top, hidden
 // Set via --window-title-position flag or appearance.window_title_position config
 var WindowTitlePosition = "bottom"
+
+// WindowTitleFgFocused is the text color for the active window's title and controls.
+// Nil means use default (black). Set via UserConfig from the host (e.g. main.go).
+var WindowTitleFgFocused color.Color
+
+// WindowTitleFgUnfocused is the text color for inactive windows' title and controls.
+// Nil means use default (black). Set via UserConfig from the host (e.g. main.go).
+var WindowTitleFgUnfocused color.Color
 
 // HideClock controls whether the clock overlay is hidden
 // Set via --hide-clock flag or appearance.hide_clock config

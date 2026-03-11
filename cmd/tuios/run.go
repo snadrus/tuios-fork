@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/tuios/internal/app"
 	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/input"
@@ -87,6 +88,13 @@ func runLocal() error {
 		}
 	} else {
 		config.WindowTitlePosition = windowTitlePosition
+	}
+
+	if userConfig.Appearance.WindowTitleFgFocused != "" {
+		config.WindowTitleFgFocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgFocused)
+	}
+	if userConfig.Appearance.WindowTitleFgUnfocused != "" {
+		config.WindowTitleFgUnfocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgUnfocused)
 	}
 
 	config.HideClock = hideClock || userConfig.Appearance.HideClock

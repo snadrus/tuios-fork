@@ -27,16 +27,16 @@ func (m *OS) getRealCursor() *tea.Cursor {
 	}
 
 	pos := window.Terminal.CursorPosition()
-	contentWidth := window.Width - 2 // subtract borders
-	contentHeight := window.Height - 2
+	contentWidth := window.Width // no side borders
+	contentHeight := window.Height - 1 // top border only
 
 	// Bounds check - cursor must be within visible content area
 	if pos.X < 0 || pos.X >= contentWidth || pos.Y < 0 || pos.Y >= contentHeight {
 		return nil
 	}
 
-	// Transform to screen coordinates (+1 for border)
-	screenX := window.X + 1 + pos.X
+	// Transform to screen coordinates (+1 for top border, no left border offset)
+	screenX := window.X + pos.X
 	screenY := window.Y + 1 + pos.Y
 
 	cursor := tea.NewCursor(screenX, screenY)

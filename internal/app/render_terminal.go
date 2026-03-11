@@ -45,11 +45,11 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 	builder := pool.GetStringBuilder()
 	defer pool.PutStringBuilder(builder)
 
-	estimatedSize := (window.Width - 2) * (window.Height - 2)
+	estimatedSize := window.Width * (window.Height - 1)
 	builder.Grow(estimatedSize)
 
-	maxY := min(window.Height-2, screen.Height())
-	maxX := min(window.Width-2, screen.Width())
+	maxY := min(window.Height-1, screen.Height())
+	maxX := min(window.Width, screen.Width())
 
 	useOptimizedRendering := !isFocused && !inTerminalMode
 
@@ -529,8 +529,8 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 }
 
 func (m *OS) renderResizeIndicator(window *terminal.Window) string {
-	termWidth := max(window.Width-2, 1)
-	termHeight := max(window.Height-2, 1)
+	termWidth := max(window.Width, 1)
+	termHeight := max(window.Height-1, 1)
 
 	resizeMsg := fmt.Sprintf("Resizing... %dx%d", termWidth, termHeight)
 

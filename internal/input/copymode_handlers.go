@@ -604,11 +604,11 @@ func handleVisualInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 // HandleCopyModeMouseClick handles mouse clicks in copy mode
 func HandleCopyModeMouseClick(cm *terminal.CopyMode, window *terminal.Window, clickX, clickY int) {
 	// Convert window-relative coordinates (with border) to terminal coordinates
-	terminalX := clickX - window.X - 1 // Account for left border
+	terminalX := clickX - window.X // No left border
 	terminalY := clickY - window.Y - 1 // Account for top border (title bar)
 
 	// Check bounds
-	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width-2 || terminalY >= window.Height-2 {
+	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width || terminalY >= window.Height-1 {
 		return // Click outside terminal content area
 	}
 
@@ -637,11 +637,11 @@ func HandleCopyModeMouseClick(cm *terminal.CopyMode, window *terminal.Window, cl
 // HandleCopyModeMouseDrag handles mouse drag start in copy mode (initiates visual selection)
 func HandleCopyModeMouseDrag(cm *terminal.CopyMode, window *terminal.Window, startX, startY int) {
 	// Convert window-relative coordinates to terminal coordinates
-	terminalX := startX - window.X - 1
+	terminalX := startX - window.X // No left border
 	terminalY := startY - window.Y - 1 // Account for top border
 
 	// Check bounds
-	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width-2 || terminalY >= window.Height-2 {
+	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width || terminalY >= window.Height-1 {
 		return
 	}
 
@@ -679,11 +679,11 @@ func HandleCopyModeMouseMotion(cm *terminal.CopyMode, window *terminal.Window, m
 	}
 
 	// Convert window-relative coordinates to terminal coordinates
-	terminalX := mouseX - window.X - 1
+	terminalX := mouseX - window.X // No left border
 	terminalY := mouseY - window.Y - 1 // Account for top border (title bar)
 
 	// Check bounds
-	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width-2 || terminalY >= window.Height-2 {
+	if terminalX < 0 || terminalY < 0 || terminalX >= window.Width || terminalY >= window.Height-1 {
 		return
 	}
 

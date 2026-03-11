@@ -1,9 +1,12 @@
 package app
 
 import (
+	"encoding/json"
 	"image/color"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/tuios/internal/config"
@@ -12,6 +15,26 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
+
+// #region agent log
+var _debugLogCount int
+
+func debugLog(payload map[string]any) {
+	if _debugLogCount >= 5 {
+		return
+	}
+	_debugLogCount++
+	payload["timestamp"] = time.Now().UnixMilli()
+	b, _ := json.Marshal(payload)
+	f, err := os.OpenFile("/GitHub/tuitop/.cursor/debug-a1ba88.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+	_, _ = f.Write(append(b, '\n'))
+}
+
+// #endregion
 
 // Deprecated: Use config.GetWindowPillLeft() instead
 const (
@@ -47,16 +70,17 @@ func RightString(str string, width int, color color.Color, windowBg ...color.Col
 	if len(windowBg) > 0 && windowBg[0] != nil {
 		padStyle = fg.Background(windowBg[0])
 	}
-	return padStyle.Render(config.GetWindowBorderTopLeft()+strings.Repeat(config.GetWindowBorderTop(), spaces)) +
-		str +
-		fg.Render(config.GetWindowBorderTopRight())
+	return padStyle.Render(strings.Repeat(config.GetWindowBorderTop(), spaces)) + str
 }
 
-func makeRounded(content string, color color.Color) string {
+func makeRounded(content string, fgColor color.Color, bgColor ...color.Color) string {
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
-	render := style.Foreground(color).Render
-	content = render(config.GetWindowPillLeft()) + content + render(config.GetWindowPillRight())
+	s := style.Foreground(fgColor)
+	if len(bgColor) > 0 && bgColor[0] != nil {
+		s = s.Background(bgColor[0])
+	}
+	content = s.Render(config.GetWindowPillLeft()) + content + s.Render(config.GetWindowPillRight())
 	return content
 }
 
@@ -120,21 +144,18 @@ func getWindowTitle(window *terminal.Window, isRenaming bool, renameBuffer strin
 
 // renderTitleWithButtons renders a title badge on the left with buttons on the right of a border line.
 // windowBg colors the gap between title and buttons when non-nil (matches window body background).
-func renderTitleWithButtons(windowName string, buttons string, width int, color color.Color, isTop bool, windowBg color.Color) string {
+// titleFg is the text color for the window title.
+func renderTitleWithButtons(windowName string, buttons string, width int, color color.Color, titleFg color.Color, isTop bool, windowBg color.Color) string {
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
 	borderStyle := style.Foreground(color)
-	nameStyle := baseButtonStyle.Background(color)
+	nameStyle := style.Foreground(titleFg).Background(color)
 
-	var borderLeft, borderChar, borderRight string
+	var borderChar string
 	if isTop {
-		borderLeft = config.GetWindowBorderTopLeft()
 		borderChar = config.GetWindowBorderTop()
-		borderRight = config.GetWindowBorderTopRight()
 	} else {
-		borderLeft = config.GetWindowBorderBottomLeft()
 		borderChar = config.GetWindowBorderBottom()
-		borderRight = config.GetWindowBorderBottomRight()
 	}
 
 	// Build name badge
@@ -159,11 +180,9 @@ func renderTitleWithButtons(windowName string, buttons string, width int, color 
 		gapStyle = borderStyle.Background(windowBg)
 	}
 
-	return borderStyle.Render(borderLeft) +
-		nameBadge +
+	return nameBadge +
 		gapStyle.Render(strings.Repeat(borderChar, middlePadding)) +
-		buttons +
-		borderStyle.Render(borderRight)
+		buttons
 }
 
 // renderTitleBadge renders a centered title badge on a border line.
@@ -208,12 +227,63 @@ func renderTitleBadge(windowName string, width int, color color.Color, isTop boo
 		borderStyle.Render(strings.Repeat(borderChar, rightPadding)+borderRight)
 }
 
-func addToBorder(content string, borderColor color.Color, window *terminal.Window, isRenaming bool, renameBuffer string, isTiling bool) string {
-	width := max(lipgloss.Width(content)-2, 0)
+func addToBorder(content string, borderColor color.Color, titleFg color.Color, window *terminal.Window, isRenaming bool, renameBuffer string, isTiling bool) string {
+	contentWidth := lipgloss.Width(content)
+	width := max(contentWidth, 0)
 	titlePos := config.WindowTitlePosition
+
+	// #region agent log
+	if window != nil {
+		lines := strings.Split(content, "\n")
+		firstLine, lastLine := "", ""
+		if len(lines) > 0 {
+			firstLine = lines[0]
+			lastLine = lines[len(lines)-1]
+		}
+		firstLineVisible := ansi.Strip(firstLine)
+		lastLineVisible := ansi.Strip(lastLine)
+		fvr := []rune(firstLineVisible)
+		lvr := []rune(lastLineVisible)
+		firstVisibleSuffix := ""
+		lastVisibleSuffix := ""
+		if len(fvr) >= 2 {
+			firstVisibleSuffix = string(fvr[max(0, len(fvr)-2):])
+		}
+		if len(lvr) >= 2 {
+			lastVisibleSuffix = string(lvr[max(0, len(lvr)-2):])
+		}
+		vtW, vtH := 0, 0
+		if window.Terminal != nil {
+			vtW = window.Terminal.Width()
+			vtH = window.Terminal.Height()
+		}
+		debugLog(map[string]any{
+			"sessionId":           "a1ba88",
+			"hypothesisId":        "E",
+			"location":            "render_helpers.go:addToBorder",
+			"message":             "VT emulator vs window dimensions",
+			"data": map[string]any{
+				"windowWidth":         window.Width,
+				"windowHeight":        window.Height,
+				"contentWidth":        contentWidth,
+				"numLines":            len(lines),
+				"vtEmulatorWidth":     vtW,
+				"vtEmulatorHeight":    vtH,
+				"firstVisibleSuffix":  firstVisibleSuffix,
+				"lastVisibleSuffix":   lastVisibleSuffix,
+			},
+		})
+	}
+	// #endregion
 
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
+
+	// Window body background for coloring the title-bar gap and button pill (nil = use default)
+	var windowBg color.Color
+	if window.Terminal != nil {
+		windowBg = window.Terminal.BackgroundColor()
+	}
 
 	// Build window buttons first so we know their width
 	var buttons string
@@ -222,15 +292,15 @@ func addToBorder(content string, borderColor color.Color, window *terminal.Windo
 		buttons = ""
 		buttonsWidth = 0
 	} else {
-		buttonStyle := baseButtonStyle.Background(borderColor)
+		buttonStyle := style.Foreground(titleFg).Background(borderColor)
 		cross := buttonStyle.Render(config.GetWindowButtonClose())
 		dash := buttonStyle.Render(" — ")
 
 		if isTiling {
-			buttons = makeRounded(dash+cross, borderColor)
+			buttons = makeRounded(dash+cross, borderColor, windowBg)
 		} else {
 			square := buttonStyle.Render(" □ ")
-			buttons = makeRounded(dash+square+cross, borderColor)
+			buttons = makeRounded(dash+square+cross, borderColor, windowBg)
 		}
 		buttonsWidth = lipgloss.Width(buttons)
 	}
@@ -239,7 +309,7 @@ func addToBorder(content string, borderColor color.Color, window *terminal.Windo
 	var titleMaxWidth int
 	if titlePos == "top" {
 		// Title on top shares space with buttons
-		titleMaxWidth = width - buttonsWidth - 2 // -2 for some padding
+		titleMaxWidth = width - buttonsWidth
 	} else {
 		titleMaxWidth = width
 	}
@@ -249,37 +319,35 @@ func addToBorder(content string, borderColor color.Color, window *terminal.Windo
 		windowName = getWindowTitle(window, isRenaming, renameBuffer, titleMaxWidth)
 	}
 
-	borderStyle := style.Foreground(borderColor)
-
-	// Window body background for coloring the title-bar gap (nil = use default)
-	var windowBg color.Color
-	if window.Terminal != nil {
-		windowBg = window.Terminal.BackgroundColor()
-	}
-
 	// Build top border
 	var topBorder string
 	if titlePos == "top" && windowName != "" {
 		// Title on top with buttons on the right
-		topBorder = renderTitleWithButtons(windowName, buttons, width, borderColor, true, windowBg)
+		topBorder = renderTitleWithButtons(windowName, buttons, width, borderColor, titleFg, true, windowBg)
 	} else {
 		// Normal top border with buttons on right
 		topBorder = RightString(buttons, width, borderColor, windowBg)
 	}
 
-	// Build bottom border
-	var bottomBorder string
-	if titlePos == "bottom" && windowName != "" {
-		bottomBorder = renderTitleBadge(windowName, width, borderColor, false)
-	} else {
-		bottomBorder = borderStyle.Render(config.GetWindowBorderBottomLeft() + strings.Repeat(config.GetWindowBorderBottom(), width) + config.GetWindowBorderBottomRight())
+	// #region agent log
+	if window != nil {
+		debugLog(map[string]any{
+			"sessionId":    "a1ba88",
+			"hypothesisId": "A",
+			"location":     "render_helpers.go:topBorder",
+			"message":      "top border vs content width",
+			"data": map[string]any{
+				"topBorderWidth": lipgloss.Width(topBorder),
+				"contentWidth":   contentWidth,
+				"derivedWidth":   width,
+				"windowWidth":    window.Width,
+				"runId":          "post-fix-corners",
+			},
+		})
 	}
+	// #endregion
 
-	lines := strings.Split(content, "\n")
-	if len(lines) > 0 {
-		lines[len(lines)-1] = bottomBorder
-	}
-	return topBorder + "\n" + strings.Join(lines, "\n")
+	return topBorder + "\n" + content
 }
 
 func styleToANSI(s lipgloss.Style) (prefix string, suffix string) {

@@ -37,12 +37,13 @@
 package tuios
 
 import (
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/tuios/internal/app"
 	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/input"
 	"github.com/Gaurav-Gosain/tuios/internal/session"
 	"github.com/Gaurav-Gosain/tuios/internal/theme"
-	tea "charm.land/bubbletea/v2"
 )
 
 // Model is the main TUIOS model that implements tea.Model.
@@ -292,6 +293,12 @@ func newModel(options Options) *Model {
 	if userConfig != nil {
 		if userConfig.Appearance.WindowTitlePosition != "" {
 			config.WindowTitlePosition = userConfig.Appearance.WindowTitlePosition
+		}
+		if userConfig.Appearance.WindowTitleFgFocused != "" {
+			config.WindowTitleFgFocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgFocused)
+		}
+		if userConfig.Appearance.WindowTitleFgUnfocused != "" {
+			config.WindowTitleFgUnfocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgUnfocused)
 		}
 		if userConfig.Appearance.HideClock {
 			config.HideClock = true

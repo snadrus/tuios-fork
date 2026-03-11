@@ -25,9 +25,7 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 	box := lipgloss.NewStyle().
 		Align(lipgloss.Left).
 		AlignVertical(lipgloss.Top).
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Border(getBorder()).
-		BorderTop(false)
+		Foreground(lipgloss.Color("#FFFFFF"))
 
 	for i := range m.Windows {
 		window := m.Windows[i]
@@ -101,12 +99,21 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 
 		isRenaming := m.RenamingWindow && i == m.FocusedWindow
 
+		var titleFg color.Color
+		if isFocused && config.WindowTitleFgFocused != nil {
+			titleFg = config.WindowTitleFgFocused
+		} else if !isFocused && config.WindowTitleFgUnfocused != nil {
+			titleFg = config.WindowTitleFgUnfocused
+		} else {
+			titleFg = lipgloss.Color("#000000") // default when not set by host
+		}
 		boxContent := addToBorder(
 			box.Width(window.Width).
 				Height(window.Height-1).
 				BorderForeground(borderColorObj).
 				Render(content),
 			borderColorObj,
+			titleFg,
 			window,
 			isRenaming,
 			m.RenameBuffer,
@@ -178,7 +185,7 @@ func (m *OS) GetKittyGraphicsCmd() tea.Cmd {
 					result[w.ID] = &WindowPositionInfo{
 						WindowX:            w.X,
 						WindowY:            w.Y,
-						ContentOffsetX:     1,
+						ContentOffsetX:     0,
 						ContentOffsetY:     1,
 						Width:              w.Width,
 						Height:             w.Height,
@@ -224,11 +231,11 @@ func (m *OS) GetSixelGraphicsCmd() tea.Cmd {
 					if w.Terminal != nil {
 						scrollbackLen = w.Terminal.ScrollbackLen()
 					}
-					return &WindowPositionInfo{
-						WindowX:            w.X,
-						WindowY:            w.Y,
-						ContentOffsetX:     1,
-						ContentOffsetY:     1,
+				return &WindowPositionInfo{
+					WindowX:            w.X,
+					WindowY:            w.Y,
+					ContentOffsetX:     0,
+					ContentOffsetY:     1,
 						Width:              w.Width,
 						Height:             w.Height,
 						Visible:            true,

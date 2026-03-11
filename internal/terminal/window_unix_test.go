@@ -90,8 +90,8 @@ func TestSetCellPixelDimensions(t *testing.T) {
 	t.Logf("PTY size after SetCellPixelDimensions: cols=%d, rows=%d, xpixel=%d, ypixel=%d",
 		ws.Col, ws.Row, ws.Xpixel, ws.Ypixel)
 
-	termWidth := 78
-	termHeight := 22
+	termWidth := 80
+	termHeight := 23
 	expectedXpixel := termWidth * 10
 	expectedYpixel := termHeight * 20
 

@@ -36,9 +36,11 @@ type AppearanceConfig struct {
 	AnimationsEnabled   *bool  `toml:"animations_enabled"`    // Enable UI animations (default: true). Set to false for instant transitions.
 	WhichKeyEnabled     *bool  `toml:"whichkey_enabled"`      // Show which-key popup after pressing leader key (default: true)
 	WhichKeyPosition    string `toml:"whichkey_position"`     // Which-key popup position: bottom-right, bottom-left, top-right, top-left, center (default: bottom-right)
-	WindowTitlePosition string `toml:"window_title_position"` // Window title position: bottom, top, hidden (default: bottom). Shows CustomName if set, else terminal title.
-	HideClock           bool   `toml:"hide_clock"`            // Hide the clock overlay (default: false)
-	SnapOnDragToEdge    *bool  `toml:"snap_on_drag_to_edge"`  // Snap windows when dragging to screen edges (default: true)
+	WindowTitlePosition    string `toml:"window_title_position"`    // Window title position: bottom, top, hidden (default: bottom). Shows CustomName if set, else terminal title.
+	WindowTitleFgFocused    string `toml:"window_title_fg_focused"`   // Hex color for active window title/controls text (e.g. "#ffffff"). Empty = default black.
+	WindowTitleFgUnfocused string `toml:"window_title_fg_unfocused"` // Hex color for inactive window title/controls text (e.g. "#000000"). Empty = default black.
+	HideClock              bool   `toml:"hide_clock"`               // Hide the clock overlay (default: false)
+	SnapOnDragToEdge       *bool  `toml:"snap_on_drag_to_edge"`     // Snap windows when dragging to screen edges (default: true)
 }
 
 // KeybindingsConfig holds all keybinding configurations

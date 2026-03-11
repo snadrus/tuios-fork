@@ -424,8 +424,8 @@ func (kp *KittyPassthrough) forwardDirectTransmit(cmd *vt.KittyCommand, windowID
 	hostY := pending.WindowY + pending.ContentOffsetY + pending.CursorY
 
 	// Calculate content area dimensions
-	contentWidth := pending.WindowWidth - 2
-	contentHeight := pending.WindowHeight - 2
+	contentWidth := pending.WindowWidth
+	contentHeight := pending.WindowHeight - 1
 
 	// Calculate image dimensions in cells
 	imgRows := pending.Rows
@@ -607,9 +607,9 @@ func (kp *KittyPassthrough) forwardFileTransmit(cmd *vt.KittyCommand, windowID s
 	hostX := windowX + contentOffsetX + cursorX
 	hostY := windowY + contentOffsetY + cursorY
 
-	// Calculate content area dimensions (accounting for borders)
-	contentWidth := windowWidth - 2  // -2 for left/right borders
-	contentHeight := windowHeight - 2 // -2 for top/bottom borders
+	// Calculate content area dimensions (top border only)
+	contentWidth := windowWidth
+	contentHeight := windowHeight - 1
 
 	// Calculate image dimensions in cells
 	// Note: calculateImageCells returns (rows, cols) in that order
@@ -752,9 +752,9 @@ func (kp *KittyPassthrough) forwardPlace(
 	// This prevents conflicts when multiple windows use the same guest image ID
 	hostID := kp.getOrAllocateHostID(windowID, cmd.ImageID)
 
-	// Calculate content area dimensions (accounting for borders)
-	contentWidth := windowWidth - 2
-	contentHeight := windowHeight - 2
+	// Calculate content area dimensions (top border only)
+	contentWidth := windowWidth
+	contentHeight := windowHeight - 1
 
 	// Calculate image dimensions and cap to content area
 	// Note: calculateImageCells returns (rows, cols) in that order
@@ -1122,10 +1122,10 @@ func (kp *KittyPassthrough) RefreshAllPlacements(getAllWindows func() map[string
 
 		kittyPassthroughLog("RefreshAllPlacements: windowID=%s, IsAltScreen=%v, visible=%v", windowID[:8], info.IsAltScreen, info.Visible)
 
-		// Calculate viewport dimensions (accounting for window borders)
+		// Calculate viewport dimensions (top border only)
 		viewportTop := info.ScrollbackLen - info.ScrollOffset
-		viewportHeight := info.Height - 2
-		viewportWidth := info.Width - 2
+		viewportHeight := info.Height - 1
+		viewportWidth := info.Width
 
 		// Collect IDs to delete (for altscreen cleanup)
 		var idsToDelete []uint32

@@ -463,15 +463,15 @@ func (m *OS) updateWindowFromState(w *terminal.Window, ws *session.WindowState) 
 	if sizeChanged {
 		// Resize terminal emulator
 		if w.Terminal != nil {
-			termWidth := max(ws.Width-2, 1)
-			termHeight := max(ws.Height-2, 1)
+			termWidth := max(ws.Width, 1)
+			termHeight := max(ws.Height-1, 1)
 			w.Terminal.Resize(termWidth, termHeight)
 		}
 
 		// Resize PTY in daemon
 		if w.DaemonResizeFunc != nil {
-			termWidth := max(ws.Width-2, 1)
-			termHeight := max(ws.Height-2, 1)
+			termWidth := max(ws.Width, 1)
+			termHeight := max(ws.Height-1, 1)
 			_ = w.DaemonResizeFunc(termWidth, termHeight)
 		}
 
@@ -618,8 +618,8 @@ func (m *OS) RestoreTerminalStates() error {
 func (m *OS) TriggerAltScreenRedraws() {
 	for _, w := range m.Windows {
 		if w.DaemonMode && w.IsAltScreen {
-			termWidth := max(w.Width-2, 1)
-			termHeight := max(w.Height-2, 1)
+			termWidth := max(w.Width, 1)
+			termHeight := max(w.Height-1, 1)
 
 			// Ensure local VT emulator dimensions match
 			if w.Terminal != nil {
@@ -807,9 +807,9 @@ func (m *OS) AddDaemonWindow(title string) *OS {
 		y = screenHeight / 4
 	}
 
-	// Calculate terminal dimensions (accounting for borders)
-	termWidth := max(width-2, 1)
-	termHeight := max(height-2, 1)
+	// Calculate terminal dimensions (top border only)
+	termWidth := max(width, 1)
+	termHeight := max(height-1, 1)
 
 	// Create PTY in daemon
 	m.LogInfo("[DAEMON] Calling CreatePTY(%s, %d, %d)", title, termWidth, termHeight)
@@ -941,9 +941,9 @@ func (m *OS) ResizeDaemonPTY(window *terminal.Window, width, height int) error {
 		return nil
 	}
 
-	// Account for borders
-	termWidth := max(width-2, 1)
-	termHeight := max(height-2, 1)
+	// Top border only
+	termWidth := max(width, 1)
+	termHeight := max(height-1, 1)
 
 	return m.DaemonClient.ResizePTY(window.PTYID, termWidth, termHeight)
 }
