@@ -110,8 +110,15 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 		} else {
 			titleFg = lipgloss.Color("#000000") // default when not set by host
 		}
+
+		// Apply window background so Lipgloss padding (during animation when VT hasn't resized)
+		// is opaque instead of transparent; avoids lower window "scribbling" through.
+		windowBox := box
+		if window.Terminal != nil && window.Terminal.BackgroundColor() != nil {
+			windowBox = windowBox.Background(window.Terminal.BackgroundColor())
+		}
 		boxContent := addToBorder(
-			box.Width(window.Width).
+			windowBox.Width(window.Width).
 				Height(window.Height-1).
 				BorderForeground(borderColorObj).
 				Render(content),

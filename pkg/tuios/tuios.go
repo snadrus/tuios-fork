@@ -106,6 +106,10 @@ type Options struct {
 	// SSHMode indicates if running over SSH.
 	SSHMode bool
 
+	// Modeless enables modeless operation: when a window is focused, input goes to terminal
+	// without requiring explicit mode switch (i.e. no need to press i/Enter to type).
+	Modeless bool
+
 	// UserConfig is a custom user configuration. If nil, defaults are used.
 	UserConfig *config.UserConfig
 }
@@ -198,6 +202,14 @@ func WithSize(width, height int) Option {
 func WithSSHMode(enabled bool) Option {
 	return func(o *Options) {
 		o.SSHMode = enabled
+	}
+}
+
+// WithModeless enables modeless operation: when a window is focused, input goes
+// to the terminal without requiring an explicit mode switch.
+func WithModeless(enabled bool) Option {
+	return func(o *Options) {
+		o.Modeless = enabled
 	}
 }
 
@@ -333,6 +345,7 @@ func newModel(options Options) *Model {
 		RecentKeys:           []app.KeyEvent{},
 		KeyHistoryMaxSize:    5,
 		IsSSHMode:            options.SSHMode,
+		Modeless:             options.Modeless,
 		Width:                options.Width,
 		Height:               options.Height,
 	}

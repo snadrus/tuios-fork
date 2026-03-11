@@ -102,6 +102,7 @@ type OS struct {
 	X                  int
 	Y                  int
 	Mode               Mode
+	Modeless           bool // When true, focused window is always in terminal mode (no explicit mode switch)
 	terminalMu         sync.Mutex
 	LastMouseX         int
 	LastMouseY         int
@@ -459,6 +460,11 @@ func (m *OS) FocusWindow(i int) *OS {
 
 	// Invalidate cache for new focused window (border color change)
 	m.Windows[i].MarkPositionDirty() // Use lighter invalidation
+
+	// Modeless: when a window is active, always be in terminal mode
+	if m.Modeless && m.Windows[i].Workspace == m.CurrentWorkspace && !m.Windows[i].Minimized && !m.Windows[i].Minimizing {
+		m.Mode = TerminalMode
+	}
 
 	return m
 }

@@ -207,7 +207,8 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	// Focus the clicked window and bring to front Z-index
 	// This happens AFTER button and copy mode checks
 	o.FocusWindow(clickedWindowIndex)
-	if o.Mode == app.TerminalMode {
+	// In modeless mode, keep terminal mode when a window is focused; don't switch to WM mode on click
+	if !o.Modeless && o.Mode == app.TerminalMode {
 		o.Mode = app.WindowManagementMode
 	}
 
