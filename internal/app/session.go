@@ -893,6 +893,104 @@ func (m *OS) AddDaemonWindow(title string) *OS {
 	return m
 }
 
+// AddDaemonWindowAt creates a new daemon window at the specified position (clamped to screen bounds).
+func (m *OS) AddDaemonWindowAt(title string, x, y int) *OS {
+	if m.DaemonClient == nil {
+		m.LogError("Cannot add daemon window: not connected to daemon")
+		return m
+	}
+
+	newID := createID()
+	if title == "" {
+		title = "Terminal " + newID[:8]
+	}
+
+	screenWidth := m.GetRenderWidth()
+	screenHeight := m.GetUsableHeight()
+	if screenWidth == 0 || screenHeight == 0 {
+		screenWidth = 80
+		screenHeight = 24
+	}
+
+	width := screenWidth / 2
+	height := screenHeight / 2
+
+	// Clamp position to keep window on screen
+	if x+width > screenWidth {
+		x = screenWidth - width
+	}
+	if y+height > screenHeight {
+		y = screenHeight - height
+	}
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+
+	termWidth := config.TerminalWidth(width)
+	termHeight := config.TerminalHeight(height)
+
+	ptyID, err := m.DaemonClient.CreatePTY(title, termWidth, termHeight)
+	if err != nil {
+		m.LogError("[DAEMON] Failed to create PTY in daemon: %v", err)
+		return m
+	}
+
+	window := terminal.NewDaemonWindow(newID, title, x, y, width, height, len(m.Windows), ptyID)
+	if window == nil {
+		m.LogError("Failed to create daemon window %s", title)
+		_ = m.DaemonClient.ClosePTY(ptyID)
+		return m
+	}
+
+	caps := GetHostCapabilities()
+	if caps.CellWidth > 0 && caps.CellHeight > 0 {
+		window.SetCellPixelDimensions(caps.CellWidth, caps.CellHeight)
+	}
+	window.Workspace = m.CurrentWorkspace
+
+	m.setupKittyPassthrough(window)
+	m.setupSixelPassthrough(window)
+	window.DaemonWriteFunc = func(data []byte) error {
+		return m.DaemonClient.WritePTY(ptyID, data)
+	}
+	window.DaemonResizeFunc = func(w, h int) error {
+		return m.DaemonClient.ResizePTY(ptyID, w, h)
+	}
+	window.StartDaemonResponseReader()
+
+	if err := m.DaemonClient.SubscribePTY(ptyID, func(data []byte) {
+		passThroughCursorStyle(data)
+		window.WriteOutputAsync(data)
+	}); err != nil {
+		m.LogError("Failed to subscribe to PTY: %v", err)
+	}
+
+	windowID := window.ID
+	m.DaemonClient.OnPTYClosed(ptyID, func() {
+		if m.WindowExitChan != nil {
+			m.WindowExitChan <- windowID
+		}
+	})
+
+	m.Windows = append(m.Windows, window)
+	m.FocusWindow(len(m.Windows) - 1)
+
+	if m.AutoTiling {
+		tree := m.GetOrCreateBSPTree()
+		if tree != nil {
+			m.AddWindowToBSPTree(window)
+		} else {
+			m.TileAllWindows()
+		}
+	}
+	m.SyncStateToDaemon()
+
+	return m
+}
+
 // DeleteDaemonWindow removes a daemon-mode window and cleans up its PTY.
 func (m *OS) DeleteDaemonWindow(i int) *OS {
 	if len(m.Windows) == 0 || i < 0 || i >= len(m.Windows) {

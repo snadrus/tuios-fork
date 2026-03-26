@@ -562,6 +562,83 @@ func (m *OS) AddWindow(title string) *OS {
 	return m
 }
 
+// AddWindowAt adds a new window at the specified position (clamped to screen bounds).
+// Use this when the host wants explicit placement (e.g. random position from a button) instead of mouse/center.
+// In daemon mode, delegates to AddDaemonWindowAt.
+func (m *OS) AddWindowAt(title string, x, y int) *OS {
+	if m.IsDaemonSession && m.DaemonClient != nil {
+		return m.AddDaemonWindowAt(title, x, y)
+	}
+	return m.addWindowAt(title, x, y)
+}
+
+// addWindowAt is the internal implementation for non-daemon AddWindowAt.
+func (m *OS) addWindowAt(title string, x, y int) *OS {
+	newID := createID()
+	if title == "" {
+		title = fmt.Sprintf("Terminal %s", newID[:8])
+	}
+
+	m.LogInfo("Creating new window at (%d,%d): %s (workspace %d)", x, y, title, m.CurrentWorkspace)
+
+	screenWidth := m.GetRenderWidth()
+	screenHeight := m.GetUsableHeight()
+	if screenWidth == 0 || screenHeight == 0 {
+		screenWidth = 80
+		screenHeight = 24
+		m.LogWarn("Screen dimensions unknown, using defaults (%dx%d)", screenWidth, screenHeight)
+	}
+
+	width := screenWidth / 2
+	height := screenHeight / 2
+
+	// Clamp position to keep window on screen
+	if x+width > screenWidth {
+		x = screenWidth - width
+	}
+	if y+height > screenHeight {
+		y = screenHeight - height
+	}
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+
+	window := terminal.NewWindow(newID, title, x, y, width, height, len(m.Windows), m.WindowExitChan)
+	if window == nil {
+		m.LogError("Failed to create window %s (PTY creation failed)", title)
+		return m
+	}
+
+	caps := GetHostCapabilities()
+	if caps.CellWidth > 0 && caps.CellHeight > 0 {
+		window.SetCellPixelDimensions(caps.CellWidth, caps.CellHeight)
+	}
+	window.Workspace = m.CurrentWorkspace
+
+	m.setupKittyPassthrough(window)
+	m.setupSixelPassthrough(window)
+
+	m.Windows = append(m.Windows, window)
+	m.LogInfo("Window created successfully: %s (ID: %s, total windows: %d)", title, newID[:8], len(m.Windows))
+
+	m.FocusWindow(len(m.Windows) - 1)
+
+	if m.AutoTiling {
+		m.LogInfo("Auto-tiling triggered for new window")
+		tree := m.GetOrCreateBSPTree()
+		if tree != nil {
+			m.AddWindowToBSPTree(window)
+		} else {
+			m.TileAllWindows()
+		}
+	}
+
+	return m
+}
+
 // UpdateAllWindowThemes updates the terminal colors for all windows when the theme changes
 func (m *OS) UpdateAllWindowThemes() {
 	m.LogInfo("Updating terminal colors for all windows after theme change")
