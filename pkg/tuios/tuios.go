@@ -320,6 +320,9 @@ func newModel(options Options) *Model {
 		if userConfig.Appearance.SnapOnDragToEdge != nil {
 			config.SnapOnDragToEdge = *userConfig.Appearance.SnapOnDragToEdge
 		}
+		if userConfig.Appearance.SuppressEmptyDesktopWelcome {
+			config.SuppressEmptyDesktopWelcome = true
+		}
 	}
 
 	// Create keybind registry

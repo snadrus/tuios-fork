@@ -60,7 +60,7 @@ func (m *OS) renderOverlays() []*lipgloss.Layer {
 		layers = append(layers, timeLayer)
 	}
 
-	if len(m.GetVisibleWindows()) == 0 {
+	if len(m.GetVisibleWindows()) == 0 && !config.SuppressEmptyDesktopWelcome {
 		asciiArt := `████████╗██╗   ██╗██╗ ██████╗ ███████╗
 ╚══██╔══╝██║   ██║██║██╔═══██╗██╔════╝
    ██║   ██║   ██║██║██║   ██║███████╗

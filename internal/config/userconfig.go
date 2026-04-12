@@ -41,6 +41,7 @@ type AppearanceConfig struct {
 	WindowTitleFgUnfocused string `toml:"window_title_fg_unfocused"` // Hex color for inactive window title/controls text (e.g. "#000000"). Empty = default black.
 	HideClock              bool   `toml:"hide_clock"`               // Hide the clock overlay (default: false)
 	SnapOnDragToEdge       *bool  `toml:"snap_on_drag_to_edge"`     // Snap windows when dragging to screen edges (default: true)
+	SuppressEmptyDesktopWelcome bool `toml:"suppress_empty_desktop_welcome"` // When true, do not show the TUIOS welcome box with no windows (for host-provided desktop)
 }
 
 // KeybindingsConfig holds all keybinding configurations
@@ -520,6 +521,10 @@ func fillMissingAppearance(cfg, defaultCfg *UserConfig) {
 	// SnapOnDragToEdge defaults to true (nil means use default)
 	if cfg.Appearance.SnapOnDragToEdge != nil {
 		SnapOnDragToEdge = *cfg.Appearance.SnapOnDragToEdge
+	}
+
+	if cfg.Appearance.SuppressEmptyDesktopWelcome {
+		SuppressEmptyDesktopWelcome = true
 	}
 }
 

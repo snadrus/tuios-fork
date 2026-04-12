@@ -328,6 +328,10 @@ var WindowTitleFgUnfocused color.Color
 // Set via --hide-clock flag or appearance.hide_clock config
 var HideClock = false
 
+// SuppressEmptyDesktopWelcome hides the centered TUIOS welcome when there are no windows (host may draw a desktop).
+// Set via appearance.suppress_empty_desktop_welcome or UserConfig from the host.
+var SuppressEmptyDesktopWelcome = false
+
 // SnapOnDragToEdge controls whether dragging a window to screen edges snaps it (fullscreen, halves, quarters)
 // Set via appearance.snap_on_drag_to_edge config
 var SnapOnDragToEdge = true
