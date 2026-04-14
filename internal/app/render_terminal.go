@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"image/color"
 	"strings"
 
@@ -202,7 +201,24 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 		}
 	}
 
-	safeColorEquals := func(a, b color.Color) bool {
+	defaultBg := color.Color(nil)
+	if window.Terminal != nil {
+		defaultBg = window.Terminal.BackgroundColor()
+	}
+
+	sanitizeChar := func(s string) string {
+		if s == "\n" {
+			return " "
+		}
+		return s
+	}
+
+	safeColorEquals := func(a, b color.Color) (result bool) {
+		defer func() {
+			if recover() != nil {
+				result = false
+			}
+		}()
 		if a == nil && b == nil {
 			return true
 		}
@@ -295,7 +311,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 							if scrollbackLine != nil && x < len(scrollbackLine) {
 								cursorCell = &scrollbackLine[x]
 								if cursorCell.Content != "" {
-									char = cursorCell.Content
+									char = sanitizeChar(string(cursorCell.Content))
 								}
 								if cursorCell.Width > 0 {
 									charWidth = cursorCell.Width
@@ -307,7 +323,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 						if screenY >= 0 && screenY < screen.Height() {
 							cursorCell = screen.CellAt(x, screenY)
 							if cursorCell != nil && cursorCell.Content != "" {
-								char = cursorCell.Content
+								char = sanitizeChar(string(cursorCell.Content))
 							}
 							if cursorCell != nil && cursorCell.Width > 0 {
 								charWidth = cursorCell.Width
@@ -317,7 +333,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 				} else {
 					cursorCell = screen.CellAt(x, y)
 					if cursorCell != nil && cursorCell.Content != "" {
-						char = cursorCell.Content
+						char = sanitizeChar(string(cursorCell.Content))
 					}
 					if cursorCell != nil && cursorCell.Width > 0 {
 						charWidth = cursorCell.Width
@@ -371,7 +387,7 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 
 			char := " "
 			if cell != nil && cell.Content != "" {
-				char = string(cell.Content)
+				char = sanitizeChar(string(cell.Content))
 			}
 
 			if inVisualMode && visualSelection != nil && visualSelection.Get(y, x) && x <= lineEndX {
@@ -469,7 +485,8 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 			isSelectionCursor := m.SelectionMode && !inTerminalMode && isFocused &&
 				x == window.SelectionCursor.X && y == window.SelectionCursor.Y
 
-			needsStyling := shouldApplyStyle(cell) || isCursorPos || isSelected || isSelectionCursor
+			needsStyling := shouldApplyStyle(cell) || isCursorPos || isSelected || isSelectionCursor ||
+				(cell != nil && cell.Style.Bg == nil && defaultBg != nil)
 
 			if x > 0 && !styleMatches(cell, isCursorPos, isSelected, isSelectionCursor) {
 				flushBatch(lineBuilder)
@@ -479,9 +496,9 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 				if batchBuilder.Len() == 0 {
 					if isSelected || isSelectionCursor {
 						if useOptimizedRendering {
-							currentStyle = buildOptimizedCellStyleCached(cell)
+							currentStyle = buildOptimizedCellStyleCached(cell, defaultBg)
 						} else {
-							currentStyle = buildCellStyleCached(cell, isCursorPos)
+							currentStyle = buildCellStyleCached(cell, isCursorPos, defaultBg)
 						}
 
 						if isSelected {
@@ -493,9 +510,9 @@ func (m *OS) renderTerminal(window *terminal.Window, isFocused bool, inTerminalM
 						}
 					} else {
 						if useOptimizedRendering {
-							currentStyle = buildOptimizedCellStyleCached(cell)
+							currentStyle = buildOptimizedCellStyleCached(cell, defaultBg)
 						} else {
-							currentStyle = buildCellStyleCached(cell, isCursorPos)
+							currentStyle = buildCellStyleCached(cell, isCursorPos, defaultBg)
 						}
 					}
 					batchHasStyle = true
@@ -534,31 +551,41 @@ func (m *OS) renderResizeIndicator(window *terminal.Window) string {
 	termWidth := window.ContentWidth()
 	termHeight := window.ContentHeight()
 
-	resizeMsg := fmt.Sprintf("Resizing... %dx%d", termWidth, termHeight)
-
+	msg := "Resizing..."
+	centerX := max((termWidth-len(msg))/2, 0)
+	// Inner border (inset 1 from edges) - ensures every row has content, fixes garbage-row bug
+	top, bot, left, right := 0, termHeight-1, 0, termWidth-1
 	var builder strings.Builder
-
-	centerY := termHeight / 2
-	centerX := max((termWidth-len(resizeMsg))/2, 0)
-
 	for y := range termHeight {
 		for x := range termWidth {
-			if y == centerY && x >= centerX && x < centerX+len(resizeMsg) {
-				msgIdx := x - centerX
-				if msgIdx < len(resizeMsg) {
-					builder.WriteRune(rune(resizeMsg[msgIdx]))
-				} else {
-					builder.WriteRune(' ')
-				}
-			} else {
-				builder.WriteRune(' ')
+			var r rune
+			switch {
+			case y == termHeight/2 && x >= centerX && x < centerX+len(msg):
+				r = rune(msg[x-centerX])
+			case y == top && x > left && x < right:
+				r = '─'
+			case y == bot && x > left && x < right:
+				r = '─'
+			case x == left && y > top && y < bot:
+				r = '│'
+			case x == right && y > top && y < bot:
+				r = '│'
+			case y == top && x == left:
+				r = '╭'
+			case y == top && x == right:
+				r = '╮'
+			case y == bot && x == left:
+				r = '╰'
+			case y == bot && x == right:
+				r = '╯'
+			default:
+				r = ' '
 			}
+			builder.WriteRune(r)
 		}
-
 		if y < termHeight-1 {
 			builder.WriteRune('\n')
 		}
 	}
-
 	return builder.String()
 }

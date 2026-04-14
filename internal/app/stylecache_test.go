@@ -23,7 +23,7 @@ func TestStyleCacheBasic(t *testing.T) {
 	}
 
 	// First access should be a miss
-	style1 := cache.Get(cell, false, false)
+	style1 := cache.Get(cell, false, false, nil)
 	stats1 := cache.GetStats()
 	if stats1.Hits != 0 {
 		t.Errorf("Expected 0 hits, got %d", stats1.Hits)
@@ -33,7 +33,7 @@ func TestStyleCacheBasic(t *testing.T) {
 	}
 
 	// Second access with same cell should be a hit
-	style2 := cache.Get(cell, false, false)
+	style2 := cache.Get(cell, false, false, nil)
 	stats2 := cache.GetStats()
 	if stats2.Hits != 1 {
 		t.Errorf("Expected 1 hit, got %d", stats2.Hits)
@@ -67,8 +67,8 @@ func TestStyleCacheDifferentAttributes(t *testing.T) {
 	}
 
 	// Get styles for both cells
-	cache.Get(cell1, false, false)
-	cache.Get(cell2, false, false)
+	cache.Get(cell1, false, false, nil)
+	cache.Get(cell2, false, false, nil)
 
 	stats := cache.GetStats()
 	if stats.Size != 2 {
@@ -90,9 +90,9 @@ func TestStyleCacheCursorDifference(t *testing.T) {
 	}
 
 	// Get style without cursor
-	cache.Get(cell, false, false)
+	cache.Get(cell, false, false, nil)
 	// Get style with cursor
-	cache.Get(cell, true, false)
+	cache.Get(cell, true, false, nil)
 
 	stats := cache.GetStats()
 	if stats.Size != 2 {
@@ -112,9 +112,9 @@ func TestStyleCacheOptimizedMode(t *testing.T) {
 	}
 
 	// Get style in normal mode
-	cache.Get(cell, false, false)
+	cache.Get(cell, false, false, nil)
 	// Get style in optimized mode (should skip attributes)
-	cache.Get(cell, false, true)
+	cache.Get(cell, false, true, nil)
 
 	stats := cache.GetStats()
 	if stats.Size != 2 {
@@ -138,7 +138,7 @@ func TestStyleCacheEviction(t *testing.T) {
 		}
 		// Alternate cursor state to create even more unique entries
 		isCursor := i%2 == 0
-		cache.Get(cell, isCursor, false)
+		cache.Get(cell, isCursor, false, nil)
 	}
 
 	stats := cache.GetStats()
@@ -167,10 +167,10 @@ func TestStyleCacheHitRate(t *testing.T) {
 	}
 
 	// First access: miss
-	cache.Get(cell, false, false)
+	cache.Get(cell, false, false, nil)
 	// Next 9 accesses: hits
 	for range 9 {
-		cache.Get(cell, false, false)
+		cache.Get(cell, false, false, nil)
 	}
 
 	stats := cache.GetStats()
@@ -191,7 +191,7 @@ func TestStyleCacheClear(t *testing.T) {
 				Attrs: uint8(i),
 			},
 		}
-		cache.Get(cell, false, false)
+		cache.Get(cell, false, false, nil)
 	}
 
 	// Clear cache
@@ -214,9 +214,9 @@ func TestStyleCacheResetStats(t *testing.T) {
 	}
 
 	// Generate some statistics
-	cache.Get(cell, false, false) // Miss
-	cache.Get(cell, false, false) // Hit
-	cache.Get(cell, false, false) // Hit
+	cache.Get(cell, false, false, nil) // Miss
+	cache.Get(cell, false, false, nil) // Hit
+	cache.Get(cell, false, false, nil) // Hit
 
 	// Reset stats
 	cache.ResetStats()
@@ -239,14 +239,14 @@ func TestStyleCacheNilCell(t *testing.T) {
 	cache := NewStyleCache(10)
 
 	// Nil cell should return empty style
-	style := cache.Get(nil, false, false)
+	style := cache.Get(nil, false, false, nil)
 	if style.Render("test") == "" {
 		t.Error("Style should still render content even for nil cell")
 	}
 
 	// Multiple nil accesses should hit cache
-	cache.Get(nil, false, false)
-	cache.Get(nil, false, false)
+	cache.Get(nil, false, false, nil)
+	cache.Get(nil, false, false, nil)
 
 	stats := cache.GetStats()
 	if stats.Hits < 2 {
@@ -272,8 +272,8 @@ func TestStyleCacheColorTypes(t *testing.T) {
 		},
 	}
 
-	cache.Get(cell1, false, false)
-	cache.Get(cell2, false, false)
+	cache.Get(cell1, false, false, nil)
+	cache.Get(cell2, false, false, nil)
 
 	stats := cache.GetStats()
 	// Different color types should create different cache entries
@@ -295,11 +295,11 @@ func BenchmarkStyleCacheHit(b *testing.B) {
 	}
 
 	// Prime the cache
-	cache.Get(cell, false, false)
+	cache.Get(cell, false, false, nil)
 
 	b.ResetTimer()
 	for b.Loop() {
-		cache.Get(cell, false, false)
+		cache.Get(cell, false, false, nil)
 	}
 }
 
@@ -316,7 +316,7 @@ func BenchmarkStyleCacheMiss(b *testing.B) {
 				Attrs: uint8(1 << uint(i%10)), // Vary attributes to force misses
 			},
 		}
-		cache.Get(cell, false, false)
+		cache.Get(cell, false, false, nil)
 		i++
 	}
 }

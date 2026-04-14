@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 
+	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/tuios/internal/theme"
 )
 
@@ -188,5 +189,15 @@ func ApplyOverrides(overrides Overrides, userConfig *UserConfig) {
 
 	if userConfig != nil && userConfig.Appearance.MaxFPS > 0 {
 		NormalFPS = max(min(userConfig.Appearance.MaxFPS, 120), 10)
+	}
+
+	// Window title foreground colors - only from user config
+	if userConfig != nil {
+		if userConfig.Appearance.WindowTitleFgFocused != "" {
+			WindowTitleFgFocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgFocused)
+		}
+		if userConfig.Appearance.WindowTitleFgUnfocused != "" {
+			WindowTitleFgUnfocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgUnfocused)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"image/color"
+	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -25,8 +26,10 @@ func getNormalBorder() lipgloss.Border {
 	return getBorder()
 }
 
-// RightString returns a right-aligned string with decorative borders.
-func RightString(str string, width int, color color.Color) string {
+// RightString returns a right-aligned string on the top border line.
+// With side borders (BorderStyle != "none") it wraps the line in ╭/╮ corner characters.
+// windowBg optionally colors the left padding to match the window body when non-nil.
+func RightString(str string, width int, color color.Color, windowBg ...color.Color) string {
 	spaces := width - lipgloss.Width(str)
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
@@ -36,16 +39,26 @@ func RightString(str string, width int, color color.Color) string {
 		return ""
 	}
 
-	return fg.Render(config.GetWindowBorderTopLeft()+strings.Repeat(config.GetWindowBorderTop(), spaces)) +
-		str +
-		fg.Render(config.GetWindowBorderTopRight())
+	padStyle := fg
+	if len(windowBg) > 0 && windowBg[0] != nil {
+		padStyle = fg.Background(windowBg[0])
+	}
+	if config.HasSideBorders() {
+		return padStyle.Render(config.GetWindowBorderTopLeft()+strings.Repeat(config.GetWindowBorderTop(), spaces)) +
+			str +
+			fg.Render(config.GetWindowBorderTopRight())
+	}
+	return padStyle.Render(strings.Repeat(config.GetWindowBorderTop(), spaces)) + str
 }
 
-func makeRounded(content string, color color.Color) string {
+func makeRounded(content string, fgColor color.Color, bgColor ...color.Color) string {
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
-	render := style.Foreground(color).Render
-	content = render(config.GetWindowPillLeft()) + content + render(config.GetWindowPillRight())
+	s := style.Foreground(fgColor)
+	if len(bgColor) > 0 && bgColor[0] != nil {
+		s = s.Background(bgColor[0])
+	}
+	content = s.Render(config.GetWindowPillLeft()) + content + s.Render(config.GetWindowPillRight())
 	return content
 }
 
@@ -57,6 +70,14 @@ func isDefaultTitle(title, windowID string) bool {
 	return title == "Terminal "+windowID[:8]
 }
 
+// userAtHostPrefix matches the common shell prompt prefix "user@host:" or "user@server: " at the start of a title.
+var userAtHostPrefix = regexp.MustCompile(`^[^@\s]+@[^\s:]+:\s*`)
+
+// stripUserAtHostPrefix removes "user@host:" from the start of a window title (e.g. "user@server: ~" -> "~").
+func stripUserAtHostPrefix(title string) string {
+	return strings.TrimSpace(userAtHostPrefix.ReplaceAllString(title, ""))
+}
+
 // getWindowTitle returns the display name for a window, truncated to fit within maxWidth.
 // Returns empty string if title should be hidden or doesn't fit.
 func getWindowTitle(window *terminal.Window, isRenaming bool, renameBuffer string, maxWidth int) string {
@@ -64,8 +85,9 @@ func getWindowTitle(window *terminal.Window, isRenaming bool, renameBuffer strin
 	if window.CustomName != "" {
 		windowName = window.CustomName
 	} else if window.Title != "" && !isDefaultTitle(window.Title, window.ID) {
-		// Only show terminal-set title if it's not the default "Terminal <id>" format
-		windowName = window.Title
+		// Only show terminal-set title if it's not the default "Terminal <id>" format.
+		// Strip common "user@host:" prefix from shell prompt titles.
+		windowName = stripUserAtHostPrefix(window.Title)
 	}
 
 	if isRenaming {
@@ -95,13 +117,110 @@ func getWindowTitle(window *terminal.Window, isRenaming bool, renameBuffer strin
 	return windowName
 }
 
+// renderTitleWithButtons renders a title badge on the left with buttons on the right of a border line.
+// windowBg colors the gap between title and buttons when non-nil (matches window body background).
+// titleFg is the text color for the window title.
+func renderTitleWithButtons(windowName string, buttons string, width int, color color.Color, titleFg color.Color, isTop bool, windowBg color.Color) string {
+	style := pool.GetStyle()
+	defer pool.PutStyle(style)
+	borderStyle := style.Foreground(color)
+	nameStyle := style.Foreground(titleFg).Background(color)
 
-func addToBorder(content string, color color.Color, window *terminal.Window, isRenaming bool, renameBuffer string, isTiling bool) string {
-	width := max(lipgloss.Width(content)-2, 0)
+	var borderLeft, borderChar, borderRight string
+	if isTop {
+		borderLeft = config.GetWindowBorderTopLeft()
+		borderChar = config.GetWindowBorderTop()
+		borderRight = config.GetWindowBorderTopRight()
+	} else {
+		borderLeft = config.GetWindowBorderBottomLeft()
+		borderChar = config.GetWindowBorderBottom()
+		borderRight = config.GetWindowBorderBottomRight()
+	}
+
+	leftCircle := borderStyle.Render(config.GetWindowPillLeft())
+	nameText := nameStyle.Render(" " + windowName + " ")
+	rightCircle := borderStyle.Render(config.GetWindowPillRight())
+	nameBadge := leftCircle + nameText + rightCircle
+
+	nameBadgeWidth := lipgloss.Width(nameBadge)
+	buttonsWidth := lipgloss.Width(buttons)
+
+	middlePadding := width - nameBadgeWidth - buttonsWidth
+	if middlePadding < 0 {
+		return RightString(buttons, width, color, windowBg)
+	}
+
+	gapStyle := borderStyle
+	if windowBg != nil {
+		gapStyle = borderStyle.Background(windowBg)
+	}
+
+	if config.HasSideBorders() {
+		return borderStyle.Render(borderLeft) +
+			nameBadge +
+			gapStyle.Render(strings.Repeat(borderChar, middlePadding)) +
+			buttons +
+			borderStyle.Render(borderRight)
+	}
+	return nameBadge +
+		gapStyle.Render(strings.Repeat(borderChar, middlePadding)) +
+		buttons
+}
+
+// renderTitleBadge renders a centered title badge on a border line.
+func renderTitleBadge(windowName string, width int, color color.Color, isTop bool) string {
+	style := pool.GetStyle()
+	defer pool.PutStyle(style)
+	borderStyle := style.Foreground(color)
+	nameStyle := baseButtonStyle.Background(color)
+
+	var borderLeft, borderChar, borderRight string
+	if isTop {
+		borderLeft = config.GetWindowBorderTopLeft()
+		borderChar = config.GetWindowBorderTop()
+		borderRight = config.GetWindowBorderTopRight()
+	} else {
+		borderLeft = config.GetWindowBorderBottomLeft()
+		borderChar = config.GetWindowBorderBottom()
+		borderRight = config.GetWindowBorderBottomRight()
+	}
+
+	if windowName == "" {
+		return borderStyle.Render(borderLeft + strings.Repeat(borderChar, width) + borderRight)
+	}
+
+	leftCircle := borderStyle.Render(config.GetWindowPillLeft())
+	nameText := nameStyle.Render(" " + windowName + " ")
+	rightCircle := borderStyle.Render(config.GetWindowPillRight())
+	nameBadge := leftCircle + nameText + rightCircle
+
+	badgeWidth := lipgloss.Width(nameBadge)
+	totalPadding := width - badgeWidth
+
+	if totalPadding < 0 {
+		return borderStyle.Render(borderLeft + strings.Repeat(borderChar, width) + borderRight)
+	}
+
+	leftPadding := totalPadding / 2
+	rightPadding := totalPadding - leftPadding
+
+	return borderStyle.Render(borderLeft+strings.Repeat(borderChar, leftPadding)) +
+		nameBadge +
+		borderStyle.Render(strings.Repeat(borderChar, rightPadding)+borderRight)
+}
+func addToBorder(content string, borderColor color.Color, titleFg color.Color, window *terminal.Window, isRenaming bool, renameBuffer string, isTiling bool) string {
+	contentWidth := lipgloss.Width(content)
+	width := max(contentWidth-config.ContentBorderWidth(), 0)
 	titlePos := config.WindowTitlePosition
 
 	style := pool.GetStyle()
 	defer pool.PutStyle(style)
+
+	// Window body background for coloring the title-bar gap and button pill (nil = use default)
+	var windowBg color.Color
+	if window.Terminal != nil {
+		windowBg = window.Terminal.BackgroundColor()
+	}
 
 	// Build window buttons first so we know their width
 	var buttons string
@@ -110,24 +229,24 @@ func addToBorder(content string, color color.Color, window *terminal.Window, isR
 		buttons = ""
 		buttonsWidth = 0
 	} else {
-		buttonStyle := baseButtonStyle.Background(color)
+		buttonStyle := style.Foreground(titleFg).Background(borderColor)
 		cross := buttonStyle.Render(config.GetWindowButtonClose())
 		dash := buttonStyle.Render("  - ")
 
 		if isTiling {
-			buttons = makeRounded(dash+cross, color)
+			buttons = makeRounded(dash+cross, borderColor, windowBg)
 		} else {
 			square := buttonStyle.Render(" □ ")
-			buttons = makeRounded(dash+square+cross, color)
+			buttons = makeRounded(dash+square+cross, borderColor, windowBg)
 		}
 		buttonsWidth = lipgloss.Width(buttons)
 	}
 
-	// Calculate available width for title based on position
+	// Calculate available width for title based on position.
+	// ContentBorderWidth() accounts for corner chars (╭/╮) that are present in side-border mode.
 	var titleMaxWidth int
 	if titlePos == "top" {
-		// Title on top shares space with buttons
-		titleMaxWidth = width - buttonsWidth - 2 // -2 for some padding
+		titleMaxWidth = width - buttonsWidth - config.ContentBorderWidth()
 	} else {
 		titleMaxWidth = width
 	}
@@ -137,19 +256,23 @@ func addToBorder(content string, color color.Color, window *terminal.Window, isR
 		windowName = getWindowTitle(window, isRenaming, renameBuffer, titleMaxWidth)
 	}
 
-	borderStyle := style.Foreground(color)
+	borderStyle := style.Foreground(borderColor)
 
-	// Build top border
+	// Build top border: resize handle (U+2921) on the left, then title/buttons
+	resizeHandle := borderStyle.Render(config.GetWindowResizeHandle())
 	var topBorder string
 	if titlePos == "top" && windowName != "" {
 		// Title on top with buttons on the right
-		topBorder = renderTitleWithButtons(windowName, buttons, width, color, true)
+		topBorder = resizeHandle + renderTitleWithButtons(windowName, buttons, width-lipgloss.Width(resizeHandle), borderColor, titleFg, true, windowBg)
 	} else {
 		// Normal top border with buttons on right
-		topBorder = RightString(buttons, width, color)
+		topBorder = resizeHandle + RightString(buttons, width-lipgloss.Width(resizeHandle), borderColor, windowBg)
 	}
 
-	// Build bottom border with optional scrollback position indicator
+	if !config.HasSideBorders() {
+		return topBorder + "\n" + content
+	}
+
 	var bottomBorder string
 	scrollIndicator := ""
 	// Show scroll position when in copy mode with scroll offset
@@ -164,9 +287,8 @@ func addToBorder(content string, color color.Color, window *terminal.Window, isR
 	}
 
 	if titlePos == "bottom" && windowName != "" {
-		bottomBorder = renderTitleBadge(windowName, width, color, false)
+		bottomBorder = renderTitleBadge(windowName, width, borderColor, false)
 	} else if scrollIndicator != "" {
-		// Bottom border with scrollback position indicator on the right
 		indicatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#fbbf24")).Bold(true)
 		indicator := indicatorStyle.Render(scrollIndicator)
 		indicatorWidth := lipgloss.Width(indicator)
@@ -182,89 +304,6 @@ func addToBorder(content string, color color.Color, window *terminal.Window, isR
 		lines[len(lines)-1] = bottomBorder
 	}
 	return topBorder + "\n" + strings.Join(lines, "\n")
-}
-
-// renderTitleWithButtons renders a top/bottom border with a title badge and buttons.
-func renderTitleWithButtons(windowName string, buttons string, width int, color color.Color, isTop bool) string {
-	style := pool.GetStyle()
-	defer pool.PutStyle(style)
-	borderStyle := style.Foreground(color)
-	nameStyle := baseButtonStyle.Background(color)
-
-	var borderChar, cornerLeft, cornerRight string
-	if isTop {
-		borderChar = config.GetWindowBorderTop()
-		cornerLeft = config.GetWindowBorderTopLeft()
-		cornerRight = config.GetWindowBorderTopRight()
-	} else {
-		borderChar = config.GetWindowBorderBottom()
-		cornerLeft = config.GetWindowBorderBottomLeft()
-		cornerRight = config.GetWindowBorderBottomRight()
-	}
-
-	// Build name badge
-	leftCircle := borderStyle.Render(config.GetWindowPillLeft())
-	nameText := nameStyle.Render(" " + windowName + " ")
-	rightCircle := borderStyle.Render(config.GetWindowPillRight())
-	nameBadge := leftCircle + nameText + rightCircle
-
-	nameBadgeWidth := lipgloss.Width(nameBadge)
-	buttonsWidth := lipgloss.Width(buttons)
-
-	// Calculate padding between title and buttons
-	middlePadding := width - nameBadgeWidth - buttonsWidth
-	if middlePadding < 0 {
-		// Not enough space, just show buttons
-		return RightString(buttons, width, color)
-	}
-
-	return borderStyle.Render(cornerLeft) +
-		nameBadge +
-		borderStyle.Render(strings.Repeat(borderChar, middlePadding)) +
-		buttons +
-		borderStyle.Render(cornerRight)
-}
-
-// renderTitleBadge renders a border with a centered title badge.
-func renderTitleBadge(windowName string, width int, color color.Color, isTop bool) string {
-	style := pool.GetStyle()
-	defer pool.PutStyle(style)
-	borderStyle := style.Foreground(color)
-	nameStyle := baseButtonStyle.Background(color)
-
-	var borderChar, cornerLeft, cornerRight string
-	if isTop {
-		borderChar = config.GetWindowBorderTop()
-		cornerLeft = config.GetWindowBorderTopLeft()
-		cornerRight = config.GetWindowBorderTopRight()
-	} else {
-		borderChar = config.GetWindowBorderBottom()
-		cornerLeft = config.GetWindowBorderBottomLeft()
-		cornerRight = config.GetWindowBorderBottomRight()
-	}
-
-	if windowName == "" {
-		return borderStyle.Render(cornerLeft + strings.Repeat(borderChar, width) + cornerRight)
-	}
-
-	leftCircle := borderStyle.Render(config.GetWindowPillLeft())
-	nameText := nameStyle.Render(" " + windowName + " ")
-	rightCircle := borderStyle.Render(config.GetWindowPillRight())
-	nameBadge := leftCircle + nameText + rightCircle
-
-	badgeWidth := lipgloss.Width(nameBadge)
-	totalPadding := width - badgeWidth
-
-	if totalPadding < 0 {
-		return borderStyle.Render(cornerLeft + strings.Repeat(borderChar, width) + cornerRight)
-	}
-
-	leftPadding := totalPadding / 2
-	rightPadding := totalPadding - leftPadding
-
-	return borderStyle.Render(cornerLeft+strings.Repeat(borderChar, leftPadding)) +
-		nameBadge +
-		borderStyle.Render(strings.Repeat(borderChar, rightPadding)+cornerRight)
 }
 
 func styleToANSI(s lipgloss.Style) (prefix string, suffix string) {
@@ -324,12 +363,101 @@ func shouldApplyStyle(cell *uv.Cell) bool {
 	return cell.Style.Fg != nil || cell.Style.Bg != nil || cell.Style.Attrs != 0
 }
 
-func buildOptimizedCellStyleCached(cell *uv.Cell) lipgloss.Style {
-	return GetGlobalStyleCache().Get(cell, false, true)
+func buildOptimizedCellStyleCached(cell *uv.Cell, defaultBg color.Color) lipgloss.Style {
+	return GetGlobalStyleCache().Get(cell, false, true, defaultBg)
 }
 
-func buildCellStyleCached(cell *uv.Cell, isCursor bool) lipgloss.Style {
-	return GetGlobalStyleCache().Get(cell, isCursor, false)
+func buildCellStyleCached(cell *uv.Cell, isCursor bool, defaultBg color.Color) lipgloss.Style {
+	return GetGlobalStyleCache().Get(cell, isCursor, false, defaultBg)
+}
+
+func buildOptimizedCellStyleWithDefaultBg(cell *uv.Cell, defaultBg color.Color) lipgloss.Style {
+	cellStyle := lipgloss.NewStyle()
+	if cell == nil {
+		return cellStyle
+	}
+	if cell.Style.Fg != nil {
+		if ansiColor, ok := cell.Style.Fg.(lipgloss.ANSIColor); ok {
+			cellStyle = cellStyle.Foreground(ansiColor)
+		} else if isColorSafe(cell.Style.Fg) {
+			cellStyle = cellStyle.Foreground(cell.Style.Fg)
+		}
+	}
+	bg := cell.Style.Bg
+	if bg == nil && defaultBg != nil {
+		bg = defaultBg
+	}
+	if bg != nil {
+		if ansiColor, ok := bg.(lipgloss.ANSIColor); ok {
+			cellStyle = cellStyle.Background(ansiColor)
+		} else if isColorSafe(bg) {
+			cellStyle = cellStyle.Background(bg)
+		}
+	}
+	return cellStyle
+}
+
+func buildCellStyleWithDefaultBg(cell *uv.Cell, isCursor bool, defaultBg color.Color) lipgloss.Style {
+	cellStyle := lipgloss.NewStyle()
+	if cell == nil {
+		return cellStyle
+	}
+	bg := cell.Style.Bg
+	if bg == nil && defaultBg != nil {
+		bg = defaultBg
+	}
+	if isCursor {
+		fg := lipgloss.Color("#FFFFFF")
+		bgColor := lipgloss.Color("#000000")
+		if cell.Style.Fg != nil {
+			if ansiColor, ok := cell.Style.Fg.(lipgloss.ANSIColor); ok {
+				fg = ansiColor
+			} else if isColorSafe(cell.Style.Fg) {
+				fg = cell.Style.Fg
+			}
+		}
+		if bg != nil {
+			if ansiColor, ok := bg.(lipgloss.ANSIColor); ok {
+				bgColor = ansiColor
+			} else if isColorSafe(bg) {
+				bgColor = bg
+			}
+		}
+		return cellStyle.Background(fg).Foreground(bgColor)
+	}
+	if cell.Style.Fg != nil {
+		if ansiColor, ok := cell.Style.Fg.(lipgloss.ANSIColor); ok {
+			cellStyle = cellStyle.Foreground(ansiColor)
+		} else if isColorSafe(cell.Style.Fg) {
+			cellStyle = cellStyle.Foreground(cell.Style.Fg)
+		}
+	}
+	if bg != nil {
+		if ansiColor, ok := bg.(lipgloss.ANSIColor); ok {
+			cellStyle = cellStyle.Background(ansiColor)
+		} else if isColorSafe(bg) {
+			cellStyle = cellStyle.Background(bg)
+		}
+	}
+	if cell.Style.Attrs != 0 {
+		attrs := cell.Style.Attrs
+		if attrs&1 != 0 {
+			cellStyle = cellStyle.Bold(true)
+		}
+		if attrs&2 != 0 {
+			cellStyle = cellStyle.Faint(true)
+		}
+		if attrs&4 != 0 {
+			cellStyle = cellStyle.Italic(true)
+		}
+		if attrs&32 != 0 {
+			cellStyle = cellStyle.Reverse(true)
+		}
+		if attrs&128 != 0 {
+			cellStyle = cellStyle.Strikethrough(true)
+		}
+	}
+	return cellStyle
 }
 
 func buildOptimizedCellStyle(cell *uv.Cell) lipgloss.Style {

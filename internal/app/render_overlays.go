@@ -60,7 +60,7 @@ func (m *OS) renderOverlays() []*lipgloss.Layer {
 		layers = append(layers, timeLayer)
 	}
 
-	if len(m.GetVisibleWindows()) == 0 {
+	if len(m.GetVisibleWindows()) == 0 && !config.SuppressEmptyDesktopWelcome {
 		asciiArt := `████████╗██╗   ██╗██╗ ██████╗ ███████╗
 ╚══██╔══╝██║   ██║██║██╔═══██╗██╔════╝
    ██║   ██║   ██║██║██║   ██║███████╗
@@ -644,9 +644,8 @@ func (m *OS) renderOverlays() []*lipgloss.Layer {
 
 		renderedSearch := searchStyle.Render(searchText)
 
-		searchOff := focusedWindow.BorderOffset()
-		searchX := focusedWindow.X + searchOff + 1
-		searchY := focusedWindow.Y + focusedWindow.Height - searchOff - 1
+		searchX := focusedWindow.X + focusedWindow.ContentOffsetX() + 1
+		searchY := focusedWindow.Y + focusedWindow.ContentOffsetY() + focusedWindow.ContentHeight() - 1
 
 		searchLayer := lipgloss.NewLayer(renderedSearch).
 			X(searchX).

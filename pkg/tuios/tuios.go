@@ -38,6 +38,7 @@ package tuios
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/Gaurav-Gosain/tuios/internal/app"
 	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/input"
@@ -79,7 +80,9 @@ type Options struct {
 	Workspaces int
 
 	// BorderStyle sets the window border style.
-	// Valid values: "rounded", "normal", "thick", "double", "hidden", "block", "ascii"
+	// "none" (default) shows only the title bar with no side or bottom borders.
+	// Other valid values: "rounded", "normal", "thick", "double", "hidden", "block", "ascii",
+	// "outer-half-block", "inner-half-block".
 	BorderStyle string
 
 	// DockbarPosition sets where the dockbar appears.
@@ -101,6 +104,10 @@ type Options struct {
 
 	// SSHMode indicates if running over SSH.
 	SSHMode bool
+
+	// Modeless enables modeless operation: when a window is focused, input goes to terminal
+	// without requiring explicit mode switch (i.e. no need to press i/Enter to type).
+	Modeless bool
 
 	// UserConfig is a custom user configuration. If nil, defaults are used.
 	UserConfig *config.UserConfig
@@ -197,6 +204,14 @@ func WithSSHMode(enabled bool) Option {
 	}
 }
 
+// WithModeless enables modeless operation: when a window is focused, input goes
+// to the terminal without requiring an explicit mode switch.
+func WithModeless(enabled bool) Option {
+	return func(o *Options) {
+		o.Modeless = enabled
+	}
+}
+
 // WithUserConfig sets a custom user configuration.
 func WithUserConfig(cfg *config.UserConfig) Option {
 	return func(o *Options) {
@@ -287,10 +302,31 @@ func newModel(options Options) *Model {
 		}
 	}
 
+	// Apply UserConfig appearance settings to global config (library path skips fillMissingAppearance)
+	if userConfig != nil {
+		if userConfig.Appearance.WindowTitlePosition != "" {
+			config.WindowTitlePosition = userConfig.Appearance.WindowTitlePosition
+		}
+		if userConfig.Appearance.WindowTitleFgFocused != "" {
+			config.WindowTitleFgFocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgFocused)
+		}
+		if userConfig.Appearance.WindowTitleFgUnfocused != "" {
+			config.WindowTitleFgUnfocused = lipgloss.Color(userConfig.Appearance.WindowTitleFgUnfocused)
+		}
+		if userConfig.Appearance.HideClock {
+			config.HideClock = true
+		}
+		if userConfig.Appearance.SnapOnDragToEdge != nil {
+			config.SnapOnDragToEdge = *userConfig.Appearance.SnapOnDragToEdge
+		}
+		if userConfig.Appearance.SuppressEmptyDesktopWelcome {
+			config.SuppressEmptyDesktopWelcome = true
+		}
+	}
+
 	// Create keybind registry
 	keybindRegistry := config.NewKeybindRegistry(userConfig)
 
-	// Create the model using the factory function
 	return app.NewOS(app.OSOptions{
 		KeybindRegistry: keybindRegistry,
 		ShowKeys:        options.ShowKeys,
@@ -298,6 +334,7 @@ func newModel(options Options) *Model {
 		Width:           options.Width,
 		Height:          options.Height,
 		IsSSHMode:       options.SSHMode,
+		Modeless:        options.Modeless,
 	})
 }
 

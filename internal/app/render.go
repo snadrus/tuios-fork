@@ -3,6 +3,7 @@ package app
 import (
 	"image/color"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -25,8 +26,10 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 	box := lipgloss.NewStyle().
 		Align(lipgloss.Left).
 		AlignVertical(lipgloss.Top).
-		Border(getBorder()).
-		BorderTop(false)
+		Foreground(lipgloss.Color("#FFFFFF"))
+	if config.HasSideBorders() {
+		box = box.Border(getBorder()).BorderTop(false)
+	}
 
 	for i := range m.Windows {
 		window := m.Windows[i]
@@ -113,26 +116,46 @@ func (m *OS) GetCanvas(render bool) *lipgloss.Canvas {
 
 		content := m.renderTerminal(window, isFocused, m.Mode == TerminalMode)
 
+		expectedLines := window.ContentHeight()
+		lines := strings.Split(content, "\n")
+		if len(lines) > expectedLines {
+			content = strings.Join(lines[:expectedLines], "\n")
+			lines = lines[:expectedLines]
+		}
+		contentLines := len(lines)
+
+		isRenaming := m.RenamingWindow && i == m.FocusedWindow
+
+		var titleFg color.Color
+		if isFocused && config.WindowTitleFgFocused != nil {
+			titleFg = config.WindowTitleFgFocused
+		} else if !isFocused && config.WindowTitleFgUnfocused != nil {
+			titleFg = config.WindowTitleFgUnfocused
+		} else {
+			titleFg = lipgloss.Color("#000000")
+		}
+
 		var boxContent string
 		isTiledBorderless := window.Tiled && (!window.Zoomed || config.SharedBorders)
 		if isTiledBorderless {
-			// Shared borders mode: no individual window borders, content fills full rect
 			boxContent = content
 		} else {
-			isRenaming := m.RenamingWindow && i == m.FocusedWindow
-
+			windowBox := box
+			if window.Terminal != nil && window.Terminal.BackgroundColor() != nil {
+				windowBox = windowBox.Background(window.Terminal.BackgroundColor())
+			}
 			boxContent = addToBorder(
-				box.Width(window.Width).
-					Height(window.Height-1).
+				windowBox.Width(window.Width).
+					Height(max(contentLines, 1)).
 					BorderForeground(borderColorObj).
 					Render(content),
 				borderColorObj,
+				titleFg,
 				window,
 				isRenaming,
 				m.RenameBuffer,
 				m.AutoTiling,
 			)
-
 		}
 
 		zIndex := window.Z
@@ -286,8 +309,8 @@ func (m *OS) GetKittyGraphicsCmd() tea.Cmd {
 					result[w.ID] = &WindowPositionInfo{
 						WindowX:            w.X,
 						WindowY:            w.Y,
-						ContentOffsetX:     w.BorderOffset(),
-						ContentOffsetY:     w.BorderOffset(),
+						ContentOffsetX:     w.ContentOffsetX(),
+						ContentOffsetY:     w.ContentOffsetY(),
 						Width:              w.Width,
 						Height:             w.Height,
 						Visible:            true,
@@ -336,8 +359,8 @@ func (m *OS) GetSixelGraphicsCmd() tea.Cmd {
 					return &WindowPositionInfo{
 						WindowX:            w.X,
 						WindowY:            w.Y,
-						ContentOffsetX:     w.BorderOffset(),
-						ContentOffsetY:     w.BorderOffset(),
+						ContentOffsetX:     w.ContentOffsetX(),
+						ContentOffsetY:     w.ContentOffsetY(),
 						Width:              w.Width,
 						Height:             w.Height,
 						Visible:            true,

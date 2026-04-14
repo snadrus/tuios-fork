@@ -36,6 +36,9 @@ type OSOptions struct {
 	// IsSSHMode indicates this is an SSH session.
 	IsSSHMode bool
 
+	// Modeless enables modeless operation: focused window is always in terminal mode.
+	Modeless bool
+
 	// SSHSession is the SSH session reference (nil in local mode).
 	SSHSession ssh.Session
 
@@ -97,6 +100,7 @@ func NewOS(opts OSOptions) *OS {
 		// Mode flags
 		IsDaemonSession: opts.IsDaemonSession,
 		IsSSHMode:       opts.IsSSHMode,
+		Modeless:        opts.Modeless,
 		SSHSession:      opts.SSHSession,
 
 		// Daemon connection

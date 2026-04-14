@@ -109,6 +109,7 @@ type OS struct {
 	X                  int
 	Y                  int
 	Mode               Mode
+	Modeless           bool // When true, focused window is always in terminal mode (no explicit mode switch)
 	terminalMu         sync.RWMutex
 	LastMouseX         int
 	LastMouseY         int
@@ -1118,6 +1119,11 @@ func (m *OS) FocusWindow(i int) *OS {
 		m.ScrollingOnFocusChange()
 	}
 
+	// Modeless: when a window is active, always be in terminal mode
+	if m.Modeless && m.Windows[i].Workspace == m.CurrentWorkspace && !m.Windows[i].Minimized && !m.Windows[i].Minimizing {
+		m.Mode = TerminalMode
+	}
+
 	return m
 }
 
@@ -2048,7 +2054,6 @@ func (m *OS) MoveSelectionCursor(window *terminal.Window, dx, dy int, extending 
 		return
 	}
 
-	// Get terminal dimensions (account for borders)
 	maxX := window.ContentWidth()
 	maxY := window.ContentHeight()
 
@@ -2161,7 +2166,7 @@ func (m *OS) extractSelectedText(window *terminal.Window) string {
 
 		// Determine start and end columns for this line
 		lineStartX := 0
-		lineEndX := window.ContentWidth() // Account for borders
+		lineEndX := window.ContentWidth()
 
 		if y == startY {
 			lineStartX = startX

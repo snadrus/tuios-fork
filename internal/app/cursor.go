@@ -39,13 +39,8 @@ func (m *OS) getRealCursor() *tea.Cursor {
 		return nil
 	}
 
-	// Transform to screen coordinates (+1 for border, +0 for tiled)
-	borderOffset := 1
-	if window.Tiled {
-		borderOffset = 0
-	}
-	screenX := window.X + borderOffset + pos.X
-	screenY := window.Y + borderOffset + pos.Y
+	screenX := window.X + window.ContentOffsetX() + pos.X
+	screenY := window.Y + window.ContentOffsetY() + pos.Y
 
 	cursor := tea.NewCursor(screenX, screenY)
 	cursor.Shape = mapCursorStyle(window.CursorStyle)

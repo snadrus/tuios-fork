@@ -109,13 +109,13 @@ func TestIsInTerminalContent(t *testing.T) {
 		},
 		{
 			name: "x at right border",
-			x:    78, y: 5, // width-2
+			x:    80, y: 5, // x == width (out of bounds with no side borders)
 			width: 80, height: 24,
 			want: false,
 		},
 		{
 			name: "y at bottom border",
-			x:    5, y: 22, // height-2
+			x:    5, y: 23, // y == height-1 (out of bounds: title bar takes 1 row, content is 0..22)
 			width: 80, height: 24,
 			want: false,
 		},

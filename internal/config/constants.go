@@ -2,6 +2,7 @@
 package config
 
 import (
+	"image/color"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -337,7 +338,8 @@ var SharedBorders = false
 
 // BorderStyle controls which border style to use for windows
 // Set via --border-style flag or appearance.border_style config
-var BorderStyle = "rounded"
+// "none" removes side and bottom borders, showing only the title bar (recommended for a clean look).
+var BorderStyle = "none"
 
 // DockbarPosition controls the position of the dockbar
 // Set via --dockbar-position flag or appearance.dockbar_position config
@@ -358,6 +360,14 @@ var HideScrollbar = false
 // Options: bottom, top, hidden
 // Set via --window-title-position flag or appearance.window_title_position config
 var WindowTitlePosition = "bottom"
+
+// WindowTitleFgFocused is the text color for the active window's title and controls.
+// Nil means use default (black). Set via UserConfig from the host (e.g. main.go).
+var WindowTitleFgFocused color.Color
+
+// WindowTitleFgUnfocused is the text color for inactive windows' title and controls.
+// Nil means use default (black). Set via UserConfig from the host (e.g. main.go).
+var WindowTitleFgUnfocused color.Color
 
 // HideClock controls whether the clock overlay is hidden
 // Set via --hide-clock flag or appearance.hide_clock config
@@ -380,6 +390,14 @@ var ShowRAM = false
 func NeedsDockTick() bool {
 	return ShowClock || ShowCPU || ShowRAM
 }
+
+// SuppressEmptyDesktopWelcome hides the centered TUIOS welcome when there are no windows (host may draw a desktop).
+// Set via appearance.suppress_empty_desktop_welcome or UserConfig from the host.
+var SuppressEmptyDesktopWelcome = false
+
+// SnapOnDragToEdge controls whether dragging a window to screen edges snaps it (fullscreen, halves, quarters)
+// Set via appearance.snap_on_drag_to_edge config
+var SnapOnDragToEdge = true
 
 // ScrollbackLines controls the number of lines to keep in scrollback buffer
 // Set via --scrollback-lines flag or appearance.scrollback_lines config
@@ -481,6 +499,9 @@ const (
 	// WindowBorderVertical is the vertical line character for window borders.
 	WindowBorderVertical = "│" // U+2502
 
+	// WindowResizeHandle is the top-left resize handle character (U+2921).
+	WindowResizeHandle     = "\u2921" // ⤡
+	WindowResizeHandleASCII = "+"
 	// WindowButtonClose is the close/kill window button character.
 	WindowButtonClose = " ⤫ " // Close/kill window
 	// WindowSeparatorChar is the separator character for window elements.
@@ -531,6 +552,8 @@ func GetBorderForStyle() lipgloss.Border {
 		return lipgloss.OuterHalfBlockBorder()
 	case "inner-half-block":
 		return lipgloss.InnerHalfBlockBorder()
+	case "none":
+		return lipgloss.HiddenBorder()
 	case "rounded":
 		fallthrough
 	default:
@@ -545,6 +568,51 @@ func GetScrollbarThumbChar() string {
 		return "#"
 	}
 	return "█"
+}
+
+// HasSideBorders returns true when the current border style includes left, right, and bottom borders.
+// When false (BorderStyle == "none"), only the title bar is rendered; the terminal content
+// fills the full window width and all but one row of the height.
+func HasSideBorders() bool {
+	return BorderStyle != "none"
+}
+
+// TerminalWidth returns the correct PTY/VT emulator column count for a given window width.
+// With side borders, two columns are reserved for the left and right border characters.
+// Without side borders ("none"), the full window width is available.
+func TerminalWidth(windowWidth int) int {
+	if HasSideBorders() {
+		return max(windowWidth-2, 1)
+	}
+	return max(windowWidth, 1)
+}
+
+// TerminalHeight returns the correct PTY/VT emulator row count for a given window height.
+// One row is always reserved for the title bar. With side borders an additional row is
+// reserved for the bottom border.
+func TerminalHeight(windowHeight int) int {
+	if HasSideBorders() {
+		return max(windowHeight-2, 1)
+	}
+	return max(windowHeight-1, 1)
+}
+
+// ContentOffsetX returns the column offset from the window's left edge to the terminal content area.
+// With side borders this is 1 (left border character). Without side borders it is 0.
+func ContentOffsetX() int {
+	if HasSideBorders() {
+		return 1
+	}
+	return 0
+}
+
+// ContentBorderWidth returns the total horizontal space (in columns) occupied by left+right borders.
+// This is 2 with side borders and 0 without.
+func ContentBorderWidth() int {
+	if HasSideBorders() {
+		return 2
+	}
+	return 0
 }
 
 // Window decoration getter functions
@@ -599,6 +667,14 @@ func GetWindowBorderHorizontal() string {
 // Deprecated: Use GetWindowBorderLeft() or GetWindowBorderRight() for half-block borders
 func GetWindowBorderVertical() string {
 	return GetWindowBorderLeft()
+}
+
+// GetWindowResizeHandle returns the top-left resize handle character (U+2921).
+func GetWindowResizeHandle() string {
+	if UseASCIIOnly {
+		return WindowResizeHandleASCII
+	}
+	return WindowResizeHandle
 }
 
 // GetWindowButtonClose returns the appropriate close button character

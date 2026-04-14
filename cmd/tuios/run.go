@@ -133,7 +133,7 @@ func runLocal() error {
 		ShowCPU:             showCPU,
 		ShowRAM:             showRAM,
 		SharedBorders:       sharedBorders,
-		ZoomMaxWidth:     zoomMaxWidth,
+		ZoomMaxWidth:        zoomMaxWidth,
 		ScrollbackLines:     scrollbackLines,
 		NoAnimations:        noAnimations,
 		ConfirmQuit:         confirmQuit,

@@ -29,7 +29,7 @@ type DaemonConfig struct {
 
 // AppearanceConfig holds appearance-related settings
 type AppearanceConfig struct {
-	BorderStyle         string `toml:"border_style"`          // Border style: rounded, normal, thick, double, hidden, block, ascii, outer-half-block, inner-half-block (borderless mode not yet implemented)
+	BorderStyle         string `toml:"border_style"`          // Border style: none (default, title-bar only), rounded, normal, thick, double, hidden, block, ascii, outer-half-block, inner-half-block
 	HideWindowButtons   bool   `toml:"hide_window_buttons"`   // Hide window control buttons (minimize, maximize, close)
 	HideScrollbar       bool   `toml:"hide_scrollbar"`        // Hide the window scrollbar thumb on the border
 	ScrollbackLines     int    `toml:"scrollback_lines"`      // Number of lines to keep in scrollback buffer (default: 10000, min: 100, max: 1000000)
@@ -39,22 +39,25 @@ type AppearanceConfig struct {
 	ConfirmQuit         *bool  `toml:"confirm_quit"`          // Always show quit confirmation dialog (default: false). When false, only shown if foreground processes are running.
 	WhichKeyEnabled     *bool  `toml:"whichkey_enabled"`      // Show which-key popup after pressing leader key (default: true)
 	WhichKeyPosition    string `toml:"whichkey_position"`     // Which-key popup position: bottom-right, bottom-left, top-right, top-left, center (default: bottom-right)
-	WindowTitlePosition string `toml:"window_title_position"` // Window title position: bottom, top, hidden (default: bottom). Shows CustomName if set, else terminal title.
-	HideClock           bool   `toml:"hide_clock"`            // Hide the clock overlay (deprecated, use show_clock)
-	ShowClock           bool   `toml:"show_clock"`            // Show the clock overlay (default: false)
-	ShowCPU             bool   `toml:"show_cpu"`              // Show CPU graph in dock (default: false)
-	ShowRAM             bool   `toml:"show_ram"`              // Show RAM usage in dock (default: false)
-	Theme               string `toml:"theme"`                 // Color theme name (e.g., dracula, nord, my-custom-theme)
-	SharedBorders       *bool  `toml:"shared_borders"`        // Share borders between adjacent tiled windows (default: false)
-	// Customization
-	Gap                 int    `toml:"gap"`                   // Gap in cells between tiled panes (default: 0)
-	BorderFocusedColor  string `toml:"border_focused_color"`  // Hex color for focused pane border (e.g., "#89b4fa")
-	BorderUnfocusedColor string `toml:"border_unfocused_color"` // Hex color for unfocused pane border (e.g., "#585b70")
-	WindowTitleFormat   string `toml:"window_title_format"`   // Format string for window titles: {title}, {index}, {cwd}
-	SeparatorStyle      string `toml:"separator_style"`       // Separator pill style: rounded (default), powerline, flat, none
-	ZoomMaxWidth        int    `toml:"zoom_max_width"`          // Max width in cells for zoom mode (0 = fullscreen, e.g. 120 centers at 120 cols)
-	NiriReverseScroll   bool   `toml:"niri_reverse_scroll"`     // Reverse mouse scroll direction in niri scrolling mode (default: false)
-	MaxFPS              int    `toml:"max_fps"`                 // Maximum render FPS (default: 60, max: 120)
+	WindowTitlePosition         string `toml:"window_title_position"`          // Window title position: bottom, top, hidden (default: bottom). Shows CustomName if set, else terminal title.
+	WindowTitleFgFocused        string `toml:"window_title_fg_focused"`        // Hex color for active window title/controls text (e.g. "#ffffff"). Empty = default black.
+	WindowTitleFgUnfocused      string `toml:"window_title_fg_unfocused"`      // Hex color for inactive window title/controls text (e.g. "#000000"). Empty = default black.
+	HideClock                   bool   `toml:"hide_clock"`                     // Hide the clock overlay (deprecated, use show_clock)
+	ShowClock                   bool   `toml:"show_clock"`                     // Show the clock overlay (default: false)
+	ShowCPU                     bool   `toml:"show_cpu"`                       // Show CPU graph in dock (default: false)
+	ShowRAM                     bool   `toml:"show_ram"`                       // Show RAM usage in dock (default: false)
+	Theme                       string `toml:"theme"`                          // Color theme name (e.g., dracula, nord, my-custom-theme)
+	SharedBorders               *bool  `toml:"shared_borders"`                 // Share borders between adjacent tiled windows (default: false)
+	SnapOnDragToEdge            *bool  `toml:"snap_on_drag_to_edge"`           // Snap windows when dragging to screen edges (default: true)
+	SuppressEmptyDesktopWelcome bool   `toml:"suppress_empty_desktop_welcome"` // When true, do not show the TUIOS welcome box with no windows (for host-provided desktop)
+	Gap                         int    `toml:"gap"`                            // Gap in cells between tiled panes (default: 0)
+	BorderFocusedColor          string `toml:"border_focused_color"`           // Hex color for focused pane border (e.g., "#89b4fa")
+	BorderUnfocusedColor        string `toml:"border_unfocused_color"`         // Hex color for unfocused pane border (e.g., "#585b70")
+	WindowTitleFormat           string `toml:"window_title_format"`            // Format string for window titles: {title}, {index}, {cwd}
+	SeparatorStyle              string `toml:"separator_style"`                // Separator pill style: rounded (default), powerline, flat, none
+	ZoomMaxWidth                int    `toml:"zoom_max_width"`                 // Max width in cells for zoom mode (0 = fullscreen, e.g. 120 centers at 120 cols)
+	NiriReverseScroll           bool   `toml:"niri_reverse_scroll"`            // Reverse mouse scroll direction in niri scrolling mode (default: false)
+	MaxFPS                      int    `toml:"max_fps"`                        // Maximum render FPS (default: 60, max: 120)
 }
 
 // HooksConfig holds shell command hooks for events.
@@ -83,7 +86,7 @@ type KeybindingsConfig struct {
 func DefaultConfig() *UserConfig {
 	cfg := &UserConfig{
 		Appearance: AppearanceConfig{
-			BorderStyle:       "rounded",
+			BorderStyle:       "none",
 			HideWindowButtons: false,
 			ScrollbackLines:   10000,
 			DockbarPosition:   "bottom",
@@ -456,9 +459,10 @@ func createDefaultConfig() (*UserConfig, error) {
 	sb.WriteString("# APPEARANCE SETTINGS\n")
 	sb.WriteString("# ============================================================================\n")
 	sb.WriteString("# border_style: Window border style\n")
-	sb.WriteString("#   Options: rounded, normal, thick, double, hidden, block, ascii,\n")
-	sb.WriteString("#            outer-half-block, inner-half-block\n")
-	sb.WriteString("#   Default: rounded\n")
+	sb.WriteString("#   none (default): title-bar only, no side or bottom borders\n")
+	sb.WriteString("#   Other options: rounded, normal, thick, double, hidden, block, ascii,\n")
+	sb.WriteString("#                  outer-half-block, inner-half-block\n")
+	sb.WriteString("#   Default: none\n")
 	sb.WriteString("#\n")
 	sb.WriteString("# dockbar_position: Position of the dockbar\n")
 	sb.WriteString("#   Options: bottom, top, hidden\n")
@@ -557,6 +561,15 @@ func fillMissingAppearance(cfg, defaultCfg *UserConfig) {
 	// ZoomMaxWidth (0 = fullscreen)
 	if cfg.Appearance.ZoomMaxWidth > 0 {
 		ZoomMaxWidth = cfg.Appearance.ZoomMaxWidth
+	}
+
+	// SnapOnDragToEdge defaults to true (nil means use default)
+	if cfg.Appearance.SnapOnDragToEdge != nil {
+		SnapOnDragToEdge = *cfg.Appearance.SnapOnDragToEdge
+	}
+
+	if cfg.Appearance.SuppressEmptyDesktopWelcome {
+		SuppressEmptyDesktopWelcome = true
 	}
 }
 

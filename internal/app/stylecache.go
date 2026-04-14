@@ -2,6 +2,7 @@ package app
 
 import (
 	"hash/maphash"
+	"image/color"
 	"sync"
 	"sync/atomic"
 
@@ -38,8 +39,8 @@ func NewStyleCache(maxSize int) *StyleCache {
 }
 
 // hashCellAttrs creates a hash key from cell attributes.
-// The hash combines foreground color, background color, text attributes, and cursor state.
-func (sc *StyleCache) hashCellAttrs(cell *uv.Cell, isCursor bool, isOptimized bool) uint64 {
+// defaultBg is used when cell.Style.Bg is nil; when provided it is included in the hash.
+func (sc *StyleCache) hashCellAttrs(cell *uv.Cell, isCursor bool, isOptimized bool, defaultBg color.Color) uint64 {
 	var h maphash.Hash
 	h.SetSeed(sc.seed)
 
@@ -94,7 +95,7 @@ func (sc *StyleCache) hashCellAttrs(cell *uv.Cell, isCursor bool, isOptimized bo
 		_ = h.WriteByte(0)
 	}
 
-	// Hash background color
+	// Hash background color (cell's Bg or defaultBg when cell has nil Bg)
 	if cell.Style.Bg != nil {
 		if ansiColor, ok := cell.Style.Bg.(lipgloss.ANSIColor); ok {
 			_ = h.WriteByte(1)
@@ -102,12 +103,18 @@ func (sc *StyleCache) hashCellAttrs(cell *uv.Cell, isCursor bool, isOptimized bo
 		} else {
 			r, g, b, a := cell.Style.Bg.RGBA()
 			_ = h.WriteByte(2)
-			// Write RGBA values as bytes
 			_ = h.WriteByte(byte(r >> 8))
 			_ = h.WriteByte(byte(g >> 8))
 			_ = h.WriteByte(byte(b >> 8))
 			_ = h.WriteByte(byte(a >> 8))
 		}
+	} else if defaultBg != nil {
+		_ = h.WriteByte(3) // mark: using defaultBg
+		r, g, b, a := defaultBg.RGBA()
+		_ = h.WriteByte(byte(r >> 8))
+		_ = h.WriteByte(byte(g >> 8))
+		_ = h.WriteByte(byte(b >> 8))
+		_ = h.WriteByte(byte(a >> 8))
 	} else {
 		_ = h.WriteByte(0)
 	}
@@ -116,9 +123,9 @@ func (sc *StyleCache) hashCellAttrs(cell *uv.Cell, isCursor bool, isOptimized bo
 }
 
 // Get retrieves a cached style or builds and caches it if not found.
-// This is the main entry point for cached style access.
-func (sc *StyleCache) Get(cell *uv.Cell, isCursor bool, optimized bool) lipgloss.Style {
-	hash := sc.hashCellAttrs(cell, isCursor, optimized)
+// defaultBg is used when cell.Style.Bg is nil (e.g. emulator's BackgroundColor).
+func (sc *StyleCache) Get(cell *uv.Cell, isCursor bool, optimized bool, defaultBg color.Color) lipgloss.Style {
+	hash := sc.hashCellAttrs(cell, isCursor, optimized, defaultBg)
 
 	// Fast path: try read lock first
 	sc.mu.RLock()
@@ -134,9 +141,9 @@ func (sc *StyleCache) Get(cell *uv.Cell, isCursor bool, optimized bool) lipgloss
 
 	var style lipgloss.Style
 	if optimized {
-		style = buildOptimizedCellStyle(cell)
+		style = buildOptimizedCellStyleWithDefaultBg(cell, defaultBg)
 	} else {
-		style = buildCellStyle(cell, isCursor)
+		style = buildCellStyleWithDefaultBg(cell, isCursor, defaultBg)
 	}
 
 	// Store in cache with write lock

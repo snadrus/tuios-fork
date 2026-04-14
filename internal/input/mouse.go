@@ -36,6 +36,34 @@ func sendMouseToWindow(win *terminal.Window, event uv.MouseEvent) {
 	}
 }
 
+func sendMouseReleaseToWindow(win *terminal.Window, event uv.MouseReleaseEvent) {
+	if win.Terminal == nil {
+		return
+	}
+	if win.DaemonMode {
+		seq := win.Terminal.EncodeMouseEvent(event)
+		if seq != "" {
+			_ = win.SendInput([]byte(seq))
+		}
+	} else {
+		win.Terminal.SendMouse(event)
+	}
+}
+
+func sendMouseWheelToWindow(win *terminal.Window, event uv.MouseWheelEvent) {
+	if win.Terminal == nil {
+		return
+	}
+	if win.DaemonMode {
+		seq := win.Terminal.EncodeMouseEvent(event)
+		if seq != "" {
+			_ = win.SendInput([]byte(seq))
+		}
+	} else {
+		win.Terminal.SendMouse(event)
+	}
+}
+
 // handleMouseClick handles mouse click events
 func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	mouse := msg.Mouse()
@@ -119,11 +147,10 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	// Forward mouse events to terminal if in terminal mode and window has mouse tracking
 	if clickedWindowIndex != -1 && o.Mode == app.TerminalMode {
 		clickedWindow := o.Windows[clickedWindowIndex]
-		// Forward mouse only when app explicitly requested mouse tracking (DECSET 1000-1003)
-		if clickedWindow.Terminal != nil && clickedWindow.Terminal.HasMouseMode() {
-			// Convert to terminal-relative coordinates (0-based)
+		hasMouseMode := clickedWindow.Terminal != nil && clickedWindow.Terminal.HasMouseMode()
+		shouldForward := clickedWindow.IsAltScreen || hasMouseMode
+		if shouldForward && clickedWindow.Terminal != nil {
 			termX, termY, inContent := clickedWindow.ScreenToTerminal(X, Y)
-			// Check if click is within terminal content area
 			if inContent {
 				// Focus the window first so subsequent events work
 				o.FocusWindow(clickedWindowIndex)
@@ -157,6 +184,31 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 				X, Y, clickedWindow.X, clickedWindow.Y, clickedWindow.Width, clickedWindow.Height, leftMost)
 			_ = f.Close()
 		}
+	}
+
+	// Check resize handle (U+2921) on title bar: left-click starts resize
+	titleBarY := clickedWindow.Y
+	resizeHandleX := clickedWindow.X + config.ContentOffsetX()
+	// Resize handle is 1–2 columns; allow slight tolerance for easier clicking
+	if mouse.Button == tea.MouseLeft && Y == titleBarY && X >= resizeHandleX && X < resizeHandleX+2 {
+		o.FocusWindow(clickedWindowIndex)
+		o.InteractionMode = true
+		o.Resizing = true
+		o.Windows[clickedWindowIndex].IsBeingManipulated = true
+		o.ResizeStartX = mouse.X
+		o.ResizeStartY = mouse.Y
+		o.PreResizeState = terminal.Window{
+			Title:  clickedWindow.Title,
+			Width:  clickedWindow.Width,
+			Height: clickedWindow.Height,
+			X:      clickedWindow.X,
+			Y:      clickedWindow.Y,
+			Z:      clickedWindow.Z,
+			ID:     clickedWindow.ID,
+		}
+		o.ResizeCorner = app.TopLeft
+		o.DraggedWindowIndex = clickedWindowIndex
+		return o, nil
 	}
 
 	// Check button clicks FIRST before mode switching or focus changes
@@ -220,7 +272,8 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	// Focus the clicked window and bring to front Z-index
 	// This happens AFTER button and copy mode checks
 	o.FocusWindow(clickedWindowIndex)
-	if o.Mode == app.TerminalMode {
+	// In modeless mode, keep terminal mode when a window is focused; don't switch to WM mode on click
+	if !o.Modeless && o.Mode == app.TerminalMode {
 		o.Mode = app.WindowManagementMode
 	}
 
@@ -279,7 +332,6 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 			// Calculate terminal coordinates relative to window content
 			terminalX, terminalY, inContent := clickedWindow.ScreenToTerminal(X, Y)
 
-			// Start text selection
 			if inContent {
 				// Track consecutive clicks for double/triple-click selection
 				now := time.Now()
@@ -371,9 +423,7 @@ func handleMouseMotion(msg tea.MouseMotionMsg, o *app.OS) (*app.OS, tea.Cmd) {
 			shouldForward := focusedWindow.Terminal.SupportsMotionEvents()
 
 			if shouldForward {
-				// Convert to terminal-relative coordinates (0-based)
 				termX, termY, inContent := focusedWindow.ScreenToTerminal(mouse.X, mouse.Y)
-				// Check if motion is within terminal content area
 				if inContent {
 					// Create adjusted mouse event with terminal-relative coordinates
 					adjustedMouse := uv.MouseMotionEvent{
@@ -733,20 +783,23 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	// Forward mouse release to terminal if in terminal mode and window has mouse tracking
 	if o.Mode == app.TerminalMode {
 		focusedWindow := o.GetFocusedWindow()
-		if focusedWindow != nil && focusedWindow.Terminal != nil && focusedWindow.Terminal.HasMouseMode() {
-			mouse := msg.Mouse()
-			// Convert to terminal-relative coordinates (0-based)
-			termX, termY, inContent := focusedWindow.ScreenToTerminal(mouse.X, mouse.Y)
-			// Check if release is within terminal content area
-			if inContent {
-				adjustedMouse := uv.MouseReleaseEvent{
-					X:      termX,
-					Y:      termY,
-					Button: uv.MouseButton(mouse.Button),
-					Mod:    uv.KeyMod(mouse.Mod),
+		if focusedWindow != nil && focusedWindow.Terminal != nil {
+			hasMouseMode := focusedWindow.Terminal.HasMouseMode()
+			shouldForward := focusedWindow.IsAltScreen || hasMouseMode
+
+			if shouldForward {
+				mouse := msg.Mouse()
+				termX, termY, inContent := focusedWindow.ScreenToTerminal(mouse.X, mouse.Y)
+				if inContent {
+					adjustedMouse := uv.MouseReleaseEvent{
+						X:      termX,
+						Y:      termY,
+						Button: uv.MouseButton(mouse.Button),
+						Mod:    uv.KeyMod(mouse.Mod),
+					}
+					sendMouseReleaseToWindow(focusedWindow, adjustedMouse)
+					return o, nil
 				}
-				sendMouseToWindow(focusedWindow, adjustedMouse)
-				return o, nil
 			}
 		}
 	}
@@ -886,15 +939,13 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		o.DraggedWindowIndex = -1
 	}
 
-	// Handle window edge snapping in floating mode (non-tiling)
-	if o.Dragging && !o.AutoTiling && o.DraggedWindowIndex >= 0 && o.DraggedWindowIndex < len(o.Windows) {
+	// Handle window edge snapping in floating mode (non-tiling), when enabled
+	if config.SnapOnDragToEdge && o.Dragging && !o.AutoTiling && o.DraggedWindowIndex >= 0 && o.DraggedWindowIndex < len(o.Windows) {
 		mouse := msg.Mouse()
 		dragDistance := abs(mouse.X-o.DragStartX) + abs(mouse.Y-o.DragStartY)
 		const dragThreshold = 5
 
 		if dragDistance >= dragThreshold {
-			// Detect edge zones for snapping
-			// Edge zone is within edgeSize pixels of screen edge
 			const edgeSize = 5
 			topMargin := o.GetTopMargin()
 			usableHeight := o.GetUsableHeight()
@@ -908,25 +959,18 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 			snapTo := app.NoSnap
 
 			if atTop && !atLeft && !atRight {
-				// Top center - fullscreen
 				snapTo = app.SnapFullScreen
 			} else if atLeft && !atTop && !atBottom {
-				// Left middle - snap left half
 				snapTo = app.SnapLeft
 			} else if atRight && !atTop && !atBottom {
-				// Right middle - snap right half
 				snapTo = app.SnapRight
 			} else if atTop && atLeft {
-				// Top-left corner - quarter
 				snapTo = app.SnapTopLeft
 			} else if atTop && atRight {
-				// Top-right corner - quarter
 				snapTo = app.SnapTopRight
 			} else if atBottom && atLeft {
-				// Bottom-left corner - quarter
 				snapTo = app.SnapBottomLeft
 			} else if atBottom && atRight {
-				// Bottom-right corner - quarter
 				snapTo = app.SnapBottomRight
 			}
 
@@ -981,14 +1025,10 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 
 		for i := range o.Windows {
 			o.Windows[i].IsBeingManipulated = false
+			o.Windows[i].InvalidateCache()
 			o.Windows[i].ContentDirty = true
-			o.Windows[i].CachedLayer = nil
 		}
 
-		// Re-tile / re-layout after drag or resize.
-		// For scrolling mode: only on actual resize (avoid viewport reset on click).
-		// For BSP shared borders: always re-tile to restore the Tiled flag that
-		// was temporarily cleared during drag setup (line 327).
 		if wasResizing && o.AutoTiling && o.UseScrollingLayout {
 			o.ScrollingSetPositions()
 		} else if o.AutoTiling && config.SharedBorders && !o.UseScrollingLayout {
@@ -1107,20 +1147,23 @@ func handleMouseWheel(msg tea.MouseWheelMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	// This allows applications like vim, less, htop to handle their own scrolling
 	if o.Mode == app.TerminalMode {
 		focusedWindow := o.GetFocusedWindow()
-		if focusedWindow != nil && focusedWindow.Terminal != nil && focusedWindow.Terminal.HasMouseMode() {
-			mouse := msg.Mouse()
-			// Convert to terminal-relative coordinates (0-based)
-			termX, termY, inContent := focusedWindow.ScreenToTerminal(mouse.X, mouse.Y)
-			// Check if wheel is within terminal content area
-			if inContent {
-				adjustedMouse := uv.MouseWheelEvent{
-					X:      termX,
-					Y:      termY,
-					Button: uv.MouseButton(mouse.Button),
-					Mod:    uv.KeyMod(mouse.Mod),
+		if focusedWindow != nil && focusedWindow.Terminal != nil {
+			hasMouseMode := focusedWindow.Terminal.HasMouseMode()
+			shouldForward := focusedWindow.IsAltScreen || hasMouseMode
+
+			if shouldForward {
+				mouse := msg.Mouse()
+				termX, termY, inContent := focusedWindow.ScreenToTerminal(mouse.X, mouse.Y)
+				if inContent {
+					adjustedMouse := uv.MouseWheelEvent{
+						X:      termX,
+						Y:      termY,
+						Button: uv.MouseButton(mouse.Button),
+						Mod:    uv.KeyMod(mouse.Mod),
+					}
+					sendMouseWheelToWindow(focusedWindow, adjustedMouse)
+					return o, nil
 				}
-				sendMouseToWindow(focusedWindow, adjustedMouse)
-				return o, nil
 			}
 		}
 	}

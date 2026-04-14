@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/layout"
 	"github.com/Gaurav-Gosain/tuios/internal/session"
 	"github.com/Gaurav-Gosain/tuios/internal/terminal"
@@ -242,8 +243,8 @@ func (m *OS) RestoreFromState(state *session.SessionState) error {
 
 		m.setupKittyPassthrough(window)
 		m.setupSixelPassthrough(window)
-	m.setupTextSizingPassthrough(window)
-	m.setupClipboardPassthrough(window)
+		m.setupTextSizingPassthrough(window)
+		m.setupClipboardPassthrough(window)
 
 		m.Windows = append(m.Windows, window)
 		m.LogInfo("[RESTORE] Window %d created: DaemonMode=%v, PTYID=%s", i, window.DaemonMode, window.PTYID[:8])
@@ -495,7 +496,6 @@ func (m *OS) updateWindowFromState(w *terminal.Window, ws *session.WindowState) 
 			w.Terminal.Resize(termWidth, termHeight)
 		}
 
-		// Resize PTY in daemon
 		if w.DaemonResizeFunc != nil {
 			termWidth := w.ContentWidth()
 			termHeight := w.ContentHeight()
@@ -669,6 +669,10 @@ func (m *OS) SyncDaemonPTYDimensions() {
 func (m *OS) TriggerAltScreenRedraws() {
 	for _, w := range m.Windows {
 		if w.DaemonMode && w.IsAltScreen {
+			if w.Terminal != nil {
+				w.Terminal.Resize(w.ContentWidth(), w.ContentHeight())
+			}
+
 			// Invalidate all caches to force re-render from fresh state
 			w.InvalidateCache()
 			w.MarkContentDirty()
@@ -932,9 +936,9 @@ func (m *OS) AddDaemonWindow(title string) *OS {
 		y = screenHeight / 4
 	}
 
-	// Calculate terminal dimensions (accounting for borders)
-	termWidth := max(width-2, 1)
-	termHeight := max(height-2, 1)
+	// Calculate terminal dimensions (top border only)
+	termWidth := config.TerminalWidth(width)
+	termHeight := config.TerminalHeight(height)
 
 	// Create PTY in daemon
 	m.LogInfo("[DAEMON] Calling CreatePTY(%s, %d, %d)", title, termWidth, termHeight)
@@ -1074,9 +1078,9 @@ func (m *OS) ResizeDaemonPTY(window *terminal.Window, width, height int) error {
 		return nil
 	}
 
-	// Account for borders
-	termWidth := max(width-2, 1)
-	termHeight := max(height-2, 1)
+	// Top border only
+	termWidth := config.TerminalWidth(width)
+	termHeight := config.TerminalHeight(height)
 
 	return m.DaemonClient.ResizePTY(window.PTYID, termWidth, termHeight)
 }

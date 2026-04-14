@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Gaurav-Gosain/tuios/internal/config"
 	"github.com/Gaurav-Gosain/tuios/internal/terminal"
 	"github.com/Gaurav-Gosain/tuios/internal/vt"
 )
@@ -627,8 +628,8 @@ func (kp *KittyPassthrough) forwardTransmit(cmd *vt.KittyCommand, rawData []byte
 	hostX := pending.WindowX + pending.ContentOffsetX + pending.CursorX
 	hostY := pending.WindowY + pending.ContentOffsetY + pending.CursorY
 
-	contentWidth := pending.WindowWidth - 2
-	contentHeight := pending.WindowHeight - 2
+	contentWidth := config.TerminalWidth(pending.WindowWidth)
+	contentHeight := config.TerminalHeight(pending.WindowHeight)
 
 	// Calculate image cell dimensions
 	imgRows := pending.Rows
@@ -806,9 +807,8 @@ func (kp *KittyPassthrough) forwardFileTransmit(cmd *vt.KittyCommand, windowID s
 	hostX := windowX + contentOffsetX + cursorX
 	hostY := windowY + contentOffsetY + cursorY
 
-	// Calculate content area dimensions (accounting for borders)
-	contentWidth := windowWidth - 2   // -2 for left/right borders
-	contentHeight := windowHeight - 2 // -2 for top/bottom borders
+	contentWidth := config.TerminalWidth(windowWidth)
+	contentHeight := config.TerminalHeight(windowHeight)
 
 	// Calculate image dimensions in cells
 	// Note: calculateImageCells returns (rows, cols) in that order
@@ -1149,9 +1149,9 @@ func (kp *KittyPassthrough) forwardPlace(
 	// This prevents conflicts when multiple windows use the same guest image ID
 	hostID := kp.getOrAllocateHostID(windowID, cmd.ImageID)
 
-	// Calculate content area dimensions (accounting for borders)
-	contentWidth := windowWidth - 2
-	contentHeight := windowHeight - 2
+	// Calculate content area dimensions (top border only)
+	contentWidth := config.TerminalWidth(windowWidth)
+	contentHeight := config.TerminalHeight(windowHeight)
 
 	// Calculate image dimensions and cap to content area
 	// Note: calculateImageCells returns (rows, cols) in that order
@@ -1445,14 +1445,6 @@ func (kp *KittyPassthrough) RefreshAllPlacements(getAllWindows func() map[string
 
 		kittyPassthroughLog("RefreshAllPlacements: windowID=%s, IsAltScreen=%v, visible=%v", windowID[:8], info.IsAltScreen, info.Visible)
 
-		// During window manipulation (drag/resize), let images reposition
-		// with the window. The change detection below (posChanged check)
-		// ensures we only re-place if the position actually changed.
-
-		// Calculate viewport dimensions (accounting for window borders).
-		// For tiled/borderless windows BorderOffset=0, so content area is full
-		// Width×Height. For floating windows with a border, it's 1, so content
-		// is (Width-2)×(Height-2).
 		viewportTop := info.ScrollbackLen - info.ScrollOffset
 		viewportHeight := info.Height - 2*info.ContentOffsetY
 		viewportWidth := info.Width - 2*info.ContentOffsetX

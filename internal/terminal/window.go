@@ -253,9 +253,9 @@ func NewWindow(id, title string, x, y, width, height, z int, exitChan chan strin
 		title = "Terminal " + id[:8]
 	}
 
-	// Create VT terminal with inner dimensions (accounting for borders)
-	terminalWidth := max(width-2, 1)
-	terminalHeight := max(height-2, 1)
+	// Create VT terminal with dimensions based on border configuration
+	terminalWidth := config.TerminalWidth(width)
+	terminalHeight := config.TerminalHeight(height)
 	// Create terminal with scrollback buffer support
 	terminal := vt.NewEmulator(terminalWidth, terminalHeight)
 	// Set scrollback buffer size from config (default: 10000, configurable via --scrollback-lines or config file)
@@ -1120,24 +1120,51 @@ func (w *Window) handleIOOperations() {
 	})
 }
 
-// ContentWidth returns the usable content width (excluding borders if not tiled).
+// ContentWidth returns the usable content width.
+// Tiled windows and windows without side borders use the full width;
+// otherwise two columns are reserved for left/right border characters.
 func (w *Window) ContentWidth() int {
-	if w.Tiled {
+	if w.Tiled || !config.HasSideBorders() {
 		return max(w.Width, 1)
 	}
 	return max(w.Width-2, 1)
 }
 
-// ContentHeight returns the usable content height (excluding borders if not tiled).
+// ContentHeight returns the usable content height.
+// Tiled windows use the full height. Non-tiled windows always lose one row
+// for the title bar, plus one more for the bottom border when side borders
+// are enabled.
 func (w *Window) ContentHeight() int {
 	if w.Tiled {
 		return max(w.Height, 1)
 	}
+	if !config.HasSideBorders() {
+		return max(w.Height-1, 1)
+	}
 	return max(w.Height-2, 1)
+}
+
+// ContentOffsetX returns the column offset from the window edge to the content area.
+// With side borders this is 1 (left border character); otherwise 0.
+func (w *Window) ContentOffsetX() int {
+	if w.Tiled || !config.HasSideBorders() {
+		return 0
+	}
+	return 1
+}
+
+// ContentOffsetY returns the row offset from the window edge to the content area.
+// Non-tiled windows always have 1 for the title bar; tiled windows have 0.
+func (w *Window) ContentOffsetY() int {
+	if w.Tiled {
+		return 0
+	}
+	return 1
 }
 
 // BorderOffset returns the number of cells used by each border edge.
 // Returns 0 for tiled windows (no individual borders), 1 otherwise.
+// Prefer ContentOffsetX/ContentOffsetY for asymmetric border layouts.
 func (w *Window) BorderOffset() int {
 	if w.Tiled {
 		return 0
@@ -1148,9 +1175,8 @@ func (w *Window) BorderOffset() int {
 // ScreenToTerminal converts screen coordinates (X, Y) to terminal-relative coordinates.
 // Returns the terminal X, Y and whether the coordinates are within the content area.
 func (w *Window) ScreenToTerminal(screenX, screenY int) (termX, termY int, ok bool) {
-	off := w.BorderOffset()
-	termX = screenX - w.X - off
-	termY = screenY - w.Y - off
+	termX = screenX - w.X - w.ContentOffsetX()
+	termY = screenY - w.Y - w.ContentOffsetY()
 	ok = termX >= 0 && termY >= 0 && termX < w.ContentWidth() && termY < w.ContentHeight()
 	return
 }
@@ -1160,15 +1186,13 @@ func (w *Window) Resize(width, height int) {
 		return
 	}
 
-	borderDeduct := 2
-	if w.Tiled {
-		borderDeduct = 0
-	}
-	termWidth := max(width-borderDeduct, 1)
-	termHeight := max(height-borderDeduct, 1)
-
 	// Check if size actually changed
 	sizeChanged := w.Width != width || w.Height != height
+
+	w.Width = width
+	w.Height = height
+	termWidth := w.ContentWidth()
+	termHeight := w.ContentHeight()
 
 	w.Terminal.Resize(termWidth, termHeight)
 	if w.Pty != nil {
@@ -1181,15 +1205,12 @@ func (w *Window) Resize(width, height int) {
 			_ = w.SetPtyPixelSize(termWidth, termHeight, xpixel, ypixel)
 		}
 	} else if w.DaemonMode && w.DaemonResizeFunc != nil {
-		// In daemon mode, use the resize callback to notify the daemon
 		if err := w.DaemonResizeFunc(termWidth, termHeight); err != nil {
-			_ = err // Acknowledge error but don't break functionality
+			_ = err
 		}
 	}
-	w.Width = width
-	w.Height = height
 
-	// Mark both position and content dirty for resize operations
+	w.InvalidateCache() // Clear stale layer/content before redraw
 	w.MarkPositionDirty()
 	w.MarkContentDirty()
 
@@ -1211,13 +1232,7 @@ func (w *Window) ResizeVisual(width, height int) {
 	// This prevents the "stuck" height and dimension mismatch issues during drag.
 	// PTY resize is still deferred until mouse release (via pending resizes).
 	if w.Terminal != nil {
-		borderDeduct := 2
-		if w.Tiled {
-			borderDeduct = 0
-		}
-		termWidth := max(width-borderDeduct, 1)
-		termHeight := max(height-borderDeduct, 1)
-		w.Terminal.Resize(termWidth, termHeight)
+		w.Terminal.Resize(w.ContentWidth(), w.ContentHeight())
 	}
 
 	w.MarkPositionDirty()

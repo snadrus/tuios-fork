@@ -152,7 +152,7 @@ func handleNormalInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 	case "^":
 		cm.CursorX = 0 // Could be enhanced to skip leading whitespace
 	case "$":
-		cm.CursorX = max(0, window.Width-3) // Account for borders
+		cm.CursorX = max(0, config.TerminalWidth(window.Width)-1) // Account for borders
 
 	// Navigation - page movement
 	case "ctrl+u":
@@ -218,7 +218,7 @@ func handleNormalInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 		cm.CursorY = window.Height / 2
 	case "L":
 		// Move to bottom of screen
-		cm.CursorY = window.Height - 3
+		cm.CursorY = config.TerminalHeight(window.Height) - 1
 
 	// Navigation - paragraph movement
 	case "{":
@@ -533,7 +533,7 @@ func handleVisualInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 		cm.CursorX = 0
 		updateVisualEnd(cm, window)
 	case "$":
-		cm.CursorX = max(0, window.Width-3)
+		cm.CursorX = max(0, config.TerminalWidth(window.Width)-1)
 		updateVisualEnd(cm, window)
 
 	// Page movement
@@ -566,7 +566,7 @@ func handleVisualInput(msg tea.KeyPressMsg, cm *terminal.CopyMode, window *termi
 		cm.CursorY = window.Height / 2
 		updateVisualEnd(cm, window)
 	case "L":
-		cm.CursorY = window.Height - 3
+		cm.CursorY = config.TerminalHeight(window.Height) - 1
 		updateVisualEnd(cm, window)
 
 	// Paragraph movement
@@ -608,7 +608,6 @@ func HandleCopyModeMouseClick(cm *terminal.CopyMode, window *terminal.Window, cl
 	// Convert window-relative coordinates (with border) to terminal coordinates
 	terminalX, terminalY, inContent := window.ScreenToTerminal(clickX, clickY)
 
-	// Check bounds
 	if !inContent {
 		return // Click outside terminal content area
 	}
@@ -640,7 +639,6 @@ func HandleCopyModeMouseDrag(cm *terminal.CopyMode, window *terminal.Window, sta
 	// Convert window-relative coordinates to terminal coordinates
 	terminalX, terminalY, inContent := window.ScreenToTerminal(startX, startY)
 
-	// Check bounds
 	if !inContent {
 		return
 	}
@@ -682,11 +680,9 @@ func HandleCopyModeMouseMotion(cm *terminal.CopyMode, window *terminal.Window, m
 	// Convert window-relative coordinates to terminal coordinates
 	terminalX, terminalY, inContent := window.ScreenToTerminal(mouseX, mouseY)
 
-	// Auto-scroll when dragging outside content area
 	if !inContent {
-		borderOff := window.BorderOffset()
-		contentTop := window.Y + borderOff
-		contentBottom := window.Y + borderOff + window.ContentHeight()
+		contentTop := window.Y + window.ContentOffsetY()
+		contentBottom := contentTop + window.ContentHeight()
 
 		scrollDir := 0
 		if mouseY < contentTop {
