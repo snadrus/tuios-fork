@@ -102,6 +102,10 @@ type OS struct {
 	AutoScrollActive         bool
 	ScrollbarDragging        bool
 	ScrollbarDragWindowIndex int // -1 when not dragging
+	ContentAreaDrag          bool // Drag started in content area to enter copy mode
+	ContentDragWindowIndex   int  // Window index for content area drag
+	ContentDragStartX        int  // Screen X where content drag started
+	ContentDragStartY        int  // Screen Y where content drag started
 	Windows            []*terminal.Window
 	FocusedWindow      int
 	Width              int
@@ -1727,8 +1731,10 @@ func (m *OS) RestoreWindow(i int) {
 
 		// Bring the window to front and focus it
 		m.FocusWindow(i)
-		// Enter window management mode to interact with the restored window
-		m.Mode = WindowManagementMode
+		// In modeless mode, FocusWindow already set TerminalMode; respect that.
+		if !m.Modeless {
+			m.Mode = WindowManagementMode
+		}
 	}
 }
 

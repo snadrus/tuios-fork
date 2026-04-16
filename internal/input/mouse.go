@@ -251,22 +251,25 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		}
 	}
 
-	// Handle copy mode mouse clicks AFTER button checks
-	if clickedWindow.CopyMode != nil && clickedWindow.CopyMode.Active {
-		// In copy mode, handle mouse clicks for cursor movement and selection
-		if mouse.Button == tea.MouseLeft {
-			// Check if clicking in terminal content area (not on title bar or buttons)
+	// Left-click on content area uses a pending-drag pattern:
+	// - If already in copy mode: drag starts visual selection, click-without-drag exits copy mode
+	// - If not in copy mode (terminal mode): drag enters copy mode, click-without-drag just focuses
+	if mouse.Button == tea.MouseLeft {
+		isCopyModeActive := clickedWindow.CopyMode != nil && clickedWindow.CopyMode.Active
+		if isCopyModeActive || o.Mode == app.TerminalMode {
 			_, _, inContent := clickedWindow.ScreenToTerminal(X, Y)
 			if inContent {
-				// Start drag for visual selection
-				HandleCopyModeMouseDrag(clickedWindow.CopyMode, clickedWindow, X, Y)
-				o.Dragging = true
-				o.DraggedWindowIndex = clickedWindowIndex
-				o.InteractionMode = true
+				o.FocusWindow(clickedWindowIndex)
+				o.ContentAreaDrag = true
+				o.ContentDragWindowIndex = clickedWindowIndex
+				o.ContentDragStartX = X
+				o.ContentDragStartY = Y
 				return o, nil
 			}
 		}
-		// If click is outside content area, fall through to normal window interaction
+		if isCopyModeActive {
+			// Click outside content area while in copy mode — fall through to normal interaction
+		}
 	}
 
 	// Focus the clicked window and bring to front Z-index
@@ -438,6 +441,30 @@ func handleMouseMotion(msg tea.MouseMotionMsg, o *app.OS) (*app.OS, tea.Cmd) {
 				}
 			}
 		}
+	}
+
+	// Content area drag: enter copy mode once the mouse actually moves
+	if o.ContentAreaDrag && o.ContentDragWindowIndex >= 0 && o.ContentDragWindowIndex < len(o.Windows) {
+		win := o.Windows[o.ContentDragWindowIndex]
+		if win.CopyMode == nil || !win.CopyMode.Active {
+			win.EnterCopyMode()
+			o.ShowNotification("COPY MODE (hjkl/q)", "info", config.NotificationDuration)
+		}
+		HandleCopyModeMouseDrag(win.CopyMode, win, o.ContentDragStartX, o.ContentDragStartY)
+		o.Dragging = true
+		o.DraggedWindowIndex = o.ContentDragWindowIndex
+		o.InteractionMode = true
+		o.ContentAreaDrag = false
+
+		scrollDir := HandleCopyModeMouseMotion(win.CopyMode, win, mouse.X, mouse.Y)
+		o.AutoScrollDir = scrollDir
+		if scrollDir != 0 && !o.AutoScrollActive {
+			o.AutoScrollActive = true
+			return o, tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+				return app.AutoScrollTickMsg{}
+			})
+		}
+		return o, nil
 	}
 
 	// Handle scrollbar drag
@@ -802,6 +829,21 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 				}
 			}
 		}
+	}
+
+	// Content area click (no drag happened) — exit copy mode if active, otherwise just focus
+	if o.ContentAreaDrag {
+		idx := o.ContentDragWindowIndex
+		o.ContentAreaDrag = false
+		o.ContentDragWindowIndex = -1
+		if idx >= 0 && idx < len(o.Windows) {
+			win := o.Windows[idx]
+			if win.CopyMode != nil && win.CopyMode.Active {
+				win.ExitCopyMode()
+				o.ShowNotification("Copy Mode Exited", "info", config.NotificationDuration)
+			}
+		}
+		return o, nil
 	}
 
 	// Clear scrollbar drag
@@ -1186,21 +1228,8 @@ func handleMouseWheel(msg tea.MouseWheelMsg, o *app.OS) (*app.OS, tea.Cmd) {
 							focusedWindow.InvalidateCache()
 						}
 					}
-				} else if o.Mode == app.TerminalMode && focusedWindow.Terminal != nil && !focusedWindow.Terminal.HasMouseMode() && !focusedWindow.IsAltScreen {
-					// No mouse tracking and not alt screen  - enter copy mode and scroll.
-					// Copy mode supports selection, search, and vim navigation.
-					if focusedWindow.CopyMode == nil || !focusedWindow.CopyMode.Active {
-						focusedWindow.EnterCopyMode()
-						o.ShowNotification("COPY MODE (hjkl/q)", "info", config.NotificationDuration)
-					}
-					if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
-						for range 3 {
-							MoveUp(focusedWindow.CopyMode, focusedWindow)
-						}
-						focusedWindow.InvalidateCache()
-					}
-				} else if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
-					// Already in copy mode  - scroll up
+			} else if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
+				// Already in copy mode (entered via drag or keyboard) — scroll up
 					for range 3 {
 						MoveUp(focusedWindow.CopyMode, focusedWindow)
 					}
@@ -1240,18 +1269,11 @@ func handleMouseWheel(msg tea.MouseWheelMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		if focusedWindow != nil && focusedWindow.Terminal != nil && !focusedWindow.IsAltScreen {
 			switch msg.Button {
 			case tea.MouseWheelUp:
-				scrollbackLen := focusedWindow.ScrollbackLen()
-				if scrollbackLen > 0 {
-					if focusedWindow.CopyMode == nil || !focusedWindow.CopyMode.Active {
-						focusedWindow.EnterCopyMode()
-						o.ShowNotification("COPY MODE (hjkl/q)", "info", config.NotificationDuration)
+				if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
+					for range 3 {
+						MoveUp(focusedWindow.CopyMode, focusedWindow)
 					}
-					if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
-						for range 3 {
-							MoveUp(focusedWindow.CopyMode, focusedWindow)
-						}
-						focusedWindow.InvalidateCache()
-					}
+					focusedWindow.InvalidateCache()
 				}
 			case tea.MouseWheelDown:
 				if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
