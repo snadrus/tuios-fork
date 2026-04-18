@@ -658,9 +658,17 @@ func (e *Emulator) Resize(width int, height int) {
 		e.Scrollback().Reflow(width)
 	}
 
-	e.scrs[0].Resize(width, height)
-	e.scrs[1].Resize(width, height)
+	pulled := e.scrs[0].Resize(width, height)
+	_ = e.scrs[1].Resize(width, height)
 	e.tabstops = uv.DefaultTabStops(width)
+
+	// When the main screen reclaims rows from scrollback on a vertical
+	// grow, the existing content (including the cursor) has been shifted
+	// down by `pulled` rows. Keep the cursor anchored to the same logical
+	// line when the main screen is active.
+	if pulled > 0 && e.scr == &e.scrs[0] {
+		y += pulled
+	}
 
 	e.setCursor(x, y)
 

@@ -167,6 +167,89 @@ func TestScrollbackWidthTracking(t *testing.T) {
 	}
 }
 
+func TestScrollbackPopNewest(t *testing.T) {
+	sb := NewScrollback(10)
+
+	// Empty buffer: PopNewest returns nil.
+	if got := sb.PopNewest(3); got != nil {
+		t.Errorf("expected nil from empty buffer, got %v", got)
+	}
+
+	// Push A..E.
+	for i := range 5 {
+		line := uv.Line{{Content: string(rune('A' + i)), Width: 1}}
+		sb.PushLine(line)
+	}
+
+	// Pop the 2 newest lines (D, E) in chronological order.
+	got := sb.PopNewest(2)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 popped lines, got %d", len(got))
+	}
+	if got[0][0].Content != "D" || got[1][0].Content != "E" {
+		t.Errorf("expected [D E], got [%v %v]", got[0][0].Content, got[1][0].Content)
+	}
+	if sb.Len() != 3 {
+		t.Errorf("expected 3 remaining lines, got %d", sb.Len())
+	}
+	// Remaining lines should be A, B, C in order.
+	for i, want := range []string{"A", "B", "C"} {
+		if l := sb.Line(i); l == nil || l[0].Content != want {
+			t.Errorf("line %d: expected %q, got %v", i, want, l)
+		}
+	}
+
+	// Popping more than available returns what is available.
+	got = sb.PopNewest(10)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 popped lines, got %d", len(got))
+	}
+	if sb.Len() != 0 {
+		t.Errorf("expected empty buffer, got %d", sb.Len())
+	}
+
+	// n<=0 returns nil.
+	if got := sb.PopNewest(0); got != nil {
+		t.Errorf("expected nil for n=0, got %v", got)
+	}
+	if got := sb.PopNewest(-1); got != nil {
+		t.Errorf("expected nil for negative n, got %v", got)
+	}
+}
+
+func TestScrollbackPopNewestFullRingBuffer(t *testing.T) {
+	sb := NewScrollback(5)
+
+	// Push 7 lines so the ring buffer wraps around (A and B are dropped).
+	for i := range 7 {
+		line := uv.Line{{Content: string(rune('A' + i)), Width: 1}}
+		sb.PushLine(line)
+	}
+	// Buffer now holds C, D, E, F, G.
+	if sb.Len() != 5 {
+		t.Fatalf("expected full buffer of 5, got %d", sb.Len())
+	}
+
+	got := sb.PopNewest(2)
+	if len(got) != 2 || got[0][0].Content != "F" || got[1][0].Content != "G" {
+		t.Fatalf("expected [F G], got %v", got)
+	}
+	if sb.Len() != 3 {
+		t.Errorf("expected 3 remaining lines, got %d", sb.Len())
+	}
+	// Remaining should be C, D, E.
+	for i, want := range []string{"C", "D", "E"} {
+		if l := sb.Line(i); l == nil || l[0].Content != want {
+			t.Errorf("line %d: expected %q, got %v", i, want, l)
+		}
+	}
+	// Subsequent pushes should still work correctly.
+	sb.PushLine(uv.Line{{Content: "H", Width: 1}})
+	if l := sb.Line(3); l == nil || l[0].Content != "H" {
+		t.Errorf("expected H after push, got %v", l)
+	}
+}
+
 func TestScrollbackEmptyPushIgnored(t *testing.T) {
 	sb := NewScrollback(5)
 

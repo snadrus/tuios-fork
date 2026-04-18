@@ -245,10 +245,42 @@ type CopyMode struct {
 	CountStartTime time.Time // When count entry started (for timeout)
 }
 
+// mergeEnv returns a copy of base with keys from extra appended (replacing any existing same-named keys).
+func mergeEnv(base []string, extra map[string]string) []string {
+	if len(extra) == 0 {
+		return append([]string(nil), base...)
+	}
+	out := make([]string, 0, len(base)+len(extra))
+	for _, e := range base {
+		k, _, ok := strings.Cut(e, "=")
+		if ok {
+			if _, replace := extra[k]; replace {
+				continue
+			}
+		}
+		out = append(out, e)
+	}
+	for k, v := range extra {
+		out = append(out, k+"="+v)
+	}
+	return out
+}
+
+func termEmulationEnv(id, termType, colorTerm string) map[string]string {
+	return map[string]string{
+		"TERM":                 termType,
+		"COLORTERM":            colorTerm,
+		"TERM_PROGRAM":         "TUIOS",
+		"TERM_PROGRAM_VERSION": "0.1.0",
+		"TUIOS_WINDOW_ID":      id,
+	}
+}
+
 // NewWindow creates a new terminal window with the specified properties.
-// It spawns a shell process, sets up PTY communication, and initializes the virtual terminal.
+// It spawns a shell process (or spawn.Program when spawn is non-nil and Program is set),
+// sets up PTY communication, and initializes the virtual terminal.
 // Returns nil if window creation fails.
-func NewWindow(id, title string, x, y, width, height, z int, exitChan chan string, ptyDataChan chan struct{}) *Window {
+func NewWindow(id, title string, x, y, width, height, z int, exitChan chan string, ptyDataChan chan struct{}, spawn *config.WindowSpawn) *Window {
 	if title == "" {
 		title = "Terminal " + id[:8]
 	}
@@ -330,13 +362,6 @@ func NewWindow(id, title string, x, y, width, height, z int, exitChan chan strin
 		},
 	})
 
-	// Detect shell
-	shell := detectShell()
-
-	// Set up environment
-	// #nosec G204 - shell is intentionally user-controlled for terminal functionality
-	cmd := exec.Command(shell)
-
 	// Get cached terminal environment (detected once on first window creation)
 	termType, colorTerm := getTerminalEnv()
 
@@ -350,13 +375,17 @@ func NewWindow(id, title string, x, y, width, height, z int, exitChan chan strin
 		}
 	}
 
-	cmd.Env = append(os.Environ(),
-		"TERM="+termType,
-		"COLORTERM="+colorTerm,
-		"TERM_PROGRAM=TUIOS",         // Identify as TUIOS terminal emulator
-		"TERM_PROGRAM_VERSION=0.1.0", // Version for compatibility checking
-		"TUIOS_WINDOW_ID="+id,
-	)
+	var cmd *exec.Cmd
+	if spawn != nil && spawn.Program != "" {
+		// #nosec G204 - Program/Args are host-provided for optional non-shell PTY leaders (e.g. file manager).
+		cmd = exec.Command(spawn.Program, spawn.Args...)
+		cmd.Env = mergeEnv(mergeEnv(os.Environ(), spawn.Env), termEmulationEnv(id, termType, colorTerm))
+	} else {
+		shell := detectShell()
+		// #nosec G204 - shell is intentionally user-controlled for terminal functionality
+		cmd = exec.Command(shell)
+		cmd.Env = mergeEnv(os.Environ(), termEmulationEnv(id, termType, colorTerm))
+	}
 
 	// Create PTY with initial size
 	// xpty requires dimensions at creation time

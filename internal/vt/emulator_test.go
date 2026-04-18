@@ -444,6 +444,69 @@ func TestEmulator_Resize(t *testing.T) {
 	}
 }
 
+// TestEmulator_ResizeGrowPullsScrollback verifies that growing the screen
+// vertically reclaims rows from scrollback into the top of the viewport and
+// shifts the cursor down accordingly. Without this behavior, growing a window
+// in a scrollback-based shell leaves blank rows above the prompt that are
+// not visible to subsequent scrollback traversal.
+func TestEmulator_ResizeGrowPullsScrollback(t *testing.T) {
+	emu := vt.NewEmulator(10, 5)
+	emu.SetScrollbackMaxLines(100)
+
+	// Fill with 15 numbered lines so 10 lines spill into scrollback.
+	for i := 1; i <= 15; i++ {
+		_, _ = emu.Write([]byte(testutil.NewANSIBuilder().
+			Text("L" + string(rune('0'+i%10))).
+			Newline().
+			String()))
+	}
+
+	scrollbackBefore := emu.ScrollbackLen()
+	if scrollbackBefore < 10 {
+		t.Fatalf("expected at least 10 lines in scrollback, got %d", scrollbackBefore)
+	}
+
+	cursorBefore := emu.CursorPosition()
+
+	// Grow height by 4 rows (same width, so no reflow side effects).
+	emu.Resize(10, 9)
+
+	if got := emu.ScrollbackLen(); got != scrollbackBefore-4 {
+		t.Errorf("expected scrollback to shrink by 4, went from %d to %d",
+			scrollbackBefore, got)
+	}
+
+	// Cursor should have moved down by the number of pulled lines.
+	cursorAfter := emu.CursorPosition()
+	if cursorAfter.Y != cursorBefore.Y+4 {
+		t.Errorf("expected cursor Y to shift by 4 (from %d), got %d",
+			cursorBefore.Y, cursorAfter.Y)
+	}
+	if cursorAfter.X != cursorBefore.X {
+		t.Errorf("expected cursor X unchanged (%d), got %d",
+			cursorBefore.X, cursorAfter.X)
+	}
+}
+
+// TestEmulator_ResizeGrowEmptyScrollback verifies that growing when there is
+// no scrollback content is a no-op with respect to cursor position.
+func TestEmulator_ResizeGrowEmptyScrollback(t *testing.T) {
+	emu := vt.NewEmulator(10, 5)
+	emu.SetScrollbackMaxLines(100)
+
+	_, _ = emu.Write([]byte("hi"))
+	cursorBefore := emu.CursorPosition()
+
+	emu.Resize(10, 10)
+
+	if emu.ScrollbackLen() != 0 {
+		t.Errorf("expected empty scrollback, got %d", emu.ScrollbackLen())
+	}
+	if got := emu.CursorPosition(); got != cursorBefore {
+		t.Errorf("expected cursor unchanged, got %v (was %v)", got, cursorBefore)
+	}
+}
+
 // =============================================================================
 // Scrollback Tests
 // =============================================================================

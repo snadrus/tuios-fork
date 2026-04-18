@@ -13,7 +13,7 @@ import (
 
 func TestSetPtyPixelSize(t *testing.T) {
 	exitChan := make(chan string, 1)
-	window := NewWindow("test-id-12345678", "Test", 0, 0, 80, 24, 0, exitChan, nil)
+	window := NewWindow("test-id-12345678", "Test", 0, 0, 80, 24, 0, exitChan, nil, nil)
 	if window == nil {
 		t.Skip("Failed to create window with PTY")
 	}
@@ -58,7 +58,7 @@ func TestSetPtyPixelSize(t *testing.T) {
 
 func TestSetCellPixelDimensions(t *testing.T) {
 	exitChan := make(chan string, 1)
-	window := NewWindow("test-id-87654321", "Test", 0, 0, 80, 24, 0, exitChan, nil)
+	window := NewWindow("test-id-87654321", "Test", 0, 0, 80, 24, 0, exitChan, nil, nil)
 	if window == nil {
 		t.Skip("Failed to create window with PTY")
 	}

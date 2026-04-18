@@ -62,23 +62,66 @@ func (s *Screen) Height() int {
 	return s.buf.Height()
 }
 
-// Resize resizes the screen.
-func (s *Screen) Resize(width int, height int) {
+// Resize resizes the screen. When the height grows, up to (height-oldHeight)
+// lines are pulled from the scrollback buffer and placed at the top of the
+// screen so that the reachable viewport expands with the window instead of
+// leaving blank rows above the existing content. Returns the number of lines
+// pulled from scrollback; callers should shift any tracked cursor position
+// down by that amount.
+func (s *Screen) Resize(width int, height int) int {
 	oldW := s.buf.Width()
 	oldH := s.buf.Height()
+
+	// Decide how many scrollback lines to reclaim before resizing so the
+	// pull count is based on the pre-resize dimensions.
+	pulled := 0
+	if height > oldH && s.scrollback != nil {
+		pulled = min(height-oldH, s.scrollback.Len())
+	}
+
 	s.buf.Resize(width, height)
 	// Resize the Touched slice to match the new height.
 	if h := s.buf.Height(); len(s.buf.Touched) != h {
 		s.buf.Touched = make([]*uv.LineData, h)
 	}
 	s.scroll = s.buf.Bounds()
-	// When growing, clear newly added rows/columns to prevent garbage from uninitialized buffer.
+
+	if pulled > 0 {
+		lines := s.scrollback.PopNewest(pulled)
+		// Shift existing content down by `pulled` rows to make room at the
+		// top. Iterating from the bottom up avoids overwriting rows we have
+		// not yet moved.
+		for y := oldH - 1; y >= 0; y-- {
+			s.buf.Lines[y+pulled] = s.buf.Lines[y]
+		}
+		// Populate the top rows with the pulled scrollback lines, padding
+		// or cropping to the current width since scrollback lines were
+		// captured at the width in effect when they were pushed.
+		for i, line := range lines {
+			row := make(uv.Line, width)
+			for x := range width {
+				if x < len(line) {
+					row[x] = line[x]
+				} else {
+					row[x] = uv.EmptyCell
+				}
+			}
+			s.buf.Lines[i] = row
+		}
+	}
+
+	// When growing, clear any rows/columns that were not filled by the
+	// scrollback pull to prevent garbage from the uninitialized buffer.
 	if height > oldH {
-		s.buf.ClearArea(uv.Rect(0, oldH, width, height-oldH))
+		startY := oldH + pulled
+		if startY < height {
+			s.buf.ClearArea(uv.Rect(0, startY, width, height-startY))
+		}
 	}
 	if width > oldW {
 		s.buf.ClearArea(uv.Rect(oldW, 0, width-oldW, height))
 	}
+	return pulled
 }
 
 // Width returns the width of the screen.

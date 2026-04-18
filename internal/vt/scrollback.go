@@ -143,6 +143,43 @@ func (sb *Scrollback) Lines() []uv.Line {
 	return result
 }
 
+// PopNewest removes up to n most-recently-pushed lines from the scrollback
+// buffer and returns them in chronological order (oldest of the popped lines
+// first, newest last). This is used when the screen grows vertically so that
+// rows that previously spilled into scrollback can be reclaimed into the
+// bottom of the visible viewport. Returns nil if n<=0 or the buffer is empty.
+func (sb *Scrollback) PopNewest(n int) []uv.Line {
+	if n <= 0 {
+		return nil
+	}
+	length := sb.Len()
+	if length == 0 {
+		return nil
+	}
+	if n > length {
+		n = length
+	}
+
+	result := make([]uv.Line, n)
+	for i := range n {
+		result[i] = sb.Line(length - n + i)
+	}
+
+	// Retreat tail by n. Since we removed at least one line, the buffer is
+	// no longer full.
+	sb.tail = (sb.tail - n + sb.maxLines) % sb.maxLines
+	sb.full = false
+
+	// Clear the vacated slots (starting at the new tail) to help the GC
+	// and keep softWrapped aligned with lines.
+	for i := range n {
+		idx := (sb.tail + i) % sb.maxLines
+		sb.lines[idx] = nil
+		sb.softWrapped[idx] = false
+	}
+	return result
+}
+
 // Clear removes all lines from the scrollback buffer.
 func (sb *Scrollback) Clear() {
 	count := sb.Len()

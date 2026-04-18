@@ -60,6 +60,9 @@ const (
 	TerminalMode = app.TerminalMode
 )
 
+// WindowSpawn selects a non-shell PTY leader and optional environment (see config.WindowSpawn).
+type WindowSpawn = config.WindowSpawn
+
 // Options configures a TUIOS instance.
 type Options struct {
 	// Theme is the color theme name (e.g., "dracula", "nord", "tokyonight").

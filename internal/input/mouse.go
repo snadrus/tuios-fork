@@ -272,6 +272,29 @@ func handleMouseClick(msg tea.MouseClickMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		}
 	}
 
+	// Right-click on the content area while in copy mode yanks the current
+	// visual selection (if any) and exits copy mode. Without this, right-click
+	// would fall through to the generic MouseRight case below and start a
+	// window resize — which is especially surprising right after the user has
+	// made a selection they intended to copy.
+	if mouse.Button == tea.MouseRight && clickedWindow.CopyMode != nil && clickedWindow.CopyMode.Active {
+		if _, _, inContent := clickedWindow.ScreenToTerminal(X, Y); inContent {
+			cm := clickedWindow.CopyMode
+			var yanked string
+			if cm.State == terminal.CopyModeVisualChar || cm.State == terminal.CopyModeVisualLine {
+				yanked = extractVisualText(cm, clickedWindow)
+			}
+			o.FocusWindow(clickedWindowIndex)
+			clickedWindow.ExitCopyMode()
+			if yanked != "" {
+				o.ShowNotification(fmt.Sprintf("Yanked %d chars", len(yanked)), "success", config.NotificationDuration)
+				return o, tea.SetClipboard(yanked)
+			}
+			o.ShowNotification("Copy Mode Exited", "info", config.NotificationDuration)
+			return o, nil
+		}
+	}
+
 	// Focus the clicked window and bring to front Z-index
 	// This happens AFTER button and copy mode checks
 	o.FocusWindow(clickedWindowIndex)
@@ -420,7 +443,9 @@ func handleMouseMotion(msg tea.MouseMotionMsg, o *app.OS) (*app.OS, tea.Cmd) {
 	// Only modes 1002 (button-event) and 1003 (any-event) support motion forwarding.
 	// Mode 1000/1001 (normal tracking) only supports click/release  - forwarding motion
 	// events to these apps causes phantom keypresses (issue #78).
-	if o.Mode == app.TerminalMode {
+	// Skip forwarding while a window-management drag/resize is in progress; the motion
+	// belongs to that operation, not the app inside the window.
+	if o.Mode == app.TerminalMode && !o.Dragging && !o.Resizing && !o.ScrollbarDragging && !o.ContentAreaDrag {
 		focusedWindow := o.GetFocusedWindow()
 		if focusedWindow != nil && focusedWindow.Terminal != nil {
 			shouldForward := focusedWindow.Terminal.SupportsMotionEvents()
@@ -807,8 +832,10 @@ func handleMouseMotion(msg tea.MouseMotionMsg, o *app.OS) (*app.OS, tea.Cmd) {
 
 // handleMouseRelease handles mouse release events
 func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
-	// Forward mouse release to terminal if in terminal mode and window has mouse tracking
-	if o.Mode == app.TerminalMode {
+	// Forward mouse release to terminal if in terminal mode and window has mouse tracking.
+	// Skip forwarding while a window-management drag/resize is in progress; the release
+	// must fall through so the drag/resize cleanup runs (PTY resize, retile, etc.).
+	if o.Mode == app.TerminalMode && !o.Dragging && !o.Resizing && !o.ScrollbarDragging && !o.ContentAreaDrag {
 		focusedWindow := o.GetFocusedWindow()
 		if focusedWindow != nil && focusedWindow.Terminal != nil {
 			hasMouseMode := focusedWindow.Terminal.HasMouseMode()
@@ -1031,11 +1058,16 @@ func handleMouseRelease(msg tea.MouseReleaseMsg, o *app.OS) (*app.OS, tea.Cmd) {
 		o.Dragging = false
 		o.Resizing = false
 
-		// Apply all pending PTY resizes that were deferred during drag/resize
+		// Apply all pending PTY resizes that were deferred during drag/resize.
+		// ResizeVisual already set w.Width/w.Height during motion, so Window.Resize
+		// sees sizeChanged==false and skips its internal TriggerRedraw. Call it
+		// explicitly here so the shell/app inside receives SIGWINCH and reflows
+		// its content at the new width.
 		if wasResizing && len(o.PendingResizes) > 0 {
 			for i := range o.Windows {
 				if dimensions, exists := o.PendingResizes[o.Windows[i].ID]; exists {
 					o.Windows[i].Resize(dimensions[0], dimensions[1])
+					o.Windows[i].TriggerRedraw()
 				}
 			}
 			o.PendingResizes = make(map[string][2]int)
@@ -1228,8 +1260,21 @@ func handleMouseWheel(msg tea.MouseWheelMsg, o *app.OS) (*app.OS, tea.Cmd) {
 							focusedWindow.InvalidateCache()
 						}
 					}
-			} else if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
-				// Already in copy mode (entered via drag or keyboard) — scroll up
+				} else if focusedWindow.Terminal != nil && !focusedWindow.Terminal.HasMouseMode() && !focusedWindow.IsAltScreen {
+					// Normal shell (no mouse tracking, not alt screen): auto-enter copy
+					// mode on wheel-up so the wheel scrolls back through scrollback.
+					if focusedWindow.CopyMode == nil || !focusedWindow.CopyMode.Active {
+						focusedWindow.EnterCopyMode()
+						o.ShowNotification("COPY MODE (hjkl/q)", "info", config.NotificationDuration)
+					}
+					if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
+						for range 3 {
+							MoveUp(focusedWindow.CopyMode, focusedWindow)
+						}
+						focusedWindow.InvalidateCache()
+					}
+				} else if focusedWindow.CopyMode != nil && focusedWindow.CopyMode.Active {
+					// Already in copy mode (entered via drag or keyboard) — scroll up
 					for range 3 {
 						MoveUp(focusedWindow.CopyMode, focusedWindow)
 					}

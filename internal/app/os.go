@@ -1165,6 +1165,21 @@ func (m *OS) RecalcZOrder() {
 // AddWindow adds a new window to the current workspace.
 // In daemon mode, this creates a daemon-managed PTY and window.
 func (m *OS) AddWindow(title string) *OS {
+	return m.addWindow(title, nil)
+}
+
+// AddWindowWithSpawn adds a window whose PTY runs Program from spawn (see config.WindowSpawn)
+// instead of an interactive shell. When Program is empty, behavior matches AddWindow.
+// Daemon sessions ignore spawn and use the default shell-only window.
+func (m *OS) AddWindowWithSpawn(title string, spawn *config.WindowSpawn) *OS {
+	if m.IsDaemonSession && m.DaemonClient != nil && spawn != nil && spawn.Program != "" {
+		m.LogWarn("[DAEMON] AddWindowWithSpawn: custom spawn not supported; opening default shell window")
+		spawn = nil
+	}
+	return m.addWindow(title, spawn)
+}
+
+func (m *OS) addWindow(title string, spawn *config.WindowSpawn) *OS {
 	// In daemon mode, use daemon PTY management
 	if m.IsDaemonSession && m.DaemonClient != nil {
 		return m.AddDaemonWindow(title)
@@ -1218,7 +1233,7 @@ func (m *OS) AddWindow(title string) *OS {
 		y = screenHeight / 4
 	}
 
-	window := terminal.NewWindow(newID, title, x, y, width, height, len(m.Windows), m.WindowExitChan, m.PTYDataChan)
+	window := terminal.NewWindow(newID, title, x, y, width, height, len(m.Windows), m.WindowExitChan, m.PTYDataChan, spawn)
 	if window == nil {
 		m.LogError("Failed to create window %s (PTY creation failed)", title)
 		return m // Failed to create window
